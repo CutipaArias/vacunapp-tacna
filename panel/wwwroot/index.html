@@ -164,6 +164,13 @@
     <div class="card">
       <h2>Citas del paciente <span class="time" id="t-citas"></span></h2>
       <div class="tbl"><table id="c-tbl"></table></div>
+      <form class="filters" id="f-rep" autocomplete="off" hidden>
+        <strong id="rep-cita"></strong>
+        <label>Nueva franja <select id="rep-franja"></select></label>
+        <button class="b" type="submit">Reprogramar</button>
+        <button class="b sec" type="button" id="rep-cancelar">Volver</button>
+      </form>
+      <div id="rep-msg" role="alert"></div>
     </div>
   </section>
 

@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Prueba de concurrencia de vac.usp_ReservarCita (T4.2, RN-14 y RN-15).
 .DESCRIPTION
@@ -84,11 +84,17 @@ SELECT SCOPE_IDENTITY();
     $ids
 }
 
+# Reserva en serie (sin competencia) y devuelve el IdCita, para preparar los escenarios de reprogramación.
+function Reservar-Directo([int]$paciente, [int]$franja) {
+    [int](Invoke-Sql "DECLARE @c INT; EXEC vac.usp_ReservarCita $paciente, $franja, $esq, NULL, @c OUTPUT; SELECT @c;" | Select-Object -First 1)
+}
+
 # Lanza una sesión por cada (paciente, franja), todas con la misma hora de disparo; devuelve el resultado de cada una.
 function Disparar($pares) {
     $hora = (Get-Date).AddSeconds(8 + [math]::Ceiling($pares.Count * 0.25)).ToString('HH:mm:ss')
     $procesos = foreach ($p in $pares) {
-        $lote = "SET NOCOUNT ON; WAITFOR TIME '$hora'; BEGIN TRY DECLARE @c INT; EXEC vac.usp_ReservarCita $($p.Paciente), $($p.Franja), $esq, NULL, @c OUTPUT; SELECT 'RESULT=OK'; END TRY BEGIN CATCH SELECT CONCAT('RESULT=ERR', ERROR_NUMBER()); END CATCH"
+        $exec = if ($p.Sql) { $p.Sql } else { "EXEC vac.usp_ReservarCita $($p.Paciente), $($p.Franja), $esq, NULL, @c OUTPUT" }
+        $lote = "SET NOCOUNT ON; WAITFOR TIME '$hora'; BEGIN TRY DECLARE @c INT; $exec; SELECT 'RESULT=OK'; END TRY BEGIN CATCH SELECT CONCAT('RESULT=ERR', ERROR_NUMBER()); END CATCH"
         $psi = New-Object Diagnostics.ProcessStartInfo
         $psi.FileName = (Get-Command sqlcmd).Source
         $psi.Arguments = "-S $Servidor -U sa -d VacunAppTacna -C -I -h -1 -W -Q `"$lote`""
@@ -137,6 +143,25 @@ try {
             $res = Disparar ($pac | ForEach-Object { @{ Paciente = $_; Franja = $franja } })
             Verificar "C  $n sesiones, 5 cupos" $res 5 '50126' "SELECT COUNT(*) FROM vac.Cita WHERE IdHorario = $franja AND Estado <> 'CANCELADA';" 5
         }
+        # D) N citas, cada una en su franja, se reprograman a la vez a una franja de 1 cupo
+        $destino = Nueva-Franja 1
+        $citas = foreach ($p in (Nuevos-Pacientes $n)) { Reservar-Directo $p (Nueva-Franja 1) }
+        $res = Disparar ($citas | ForEach-Object { @{ Sql = "EXEC vac.usp_ReprogramarCita $_, $destino" } })
+        Verificar "D  $n reprogramaciones a 1 cupo" $res 1 '50126' "SELECT COUNT(*) FROM vac.Cita WHERE IdHorario = $destino AND Estado <> 'CANCELADA';" 1
+        Verificar "D' $n citas siguen programadas (ninguna se pierde)" @('OK') 1 '50126' "SELECT COUNT(*) FROM vac.Cita WHERE IdCita IN ($($citas -join ',')) AND Estado = 'PROGRAMADA';" $n
+
+        # E) intercambios cruzados: A pasa de S1 a S2 mientras B pasa de S2 a S1 (cupo 2 en cada una).
+        #    Con bloqueos en orden distinto aparecería un interbloqueo (error 1205); con orden ascendente, todos pasan.
+        $pares = [math]::Floor($n / 2)
+        $sentencias = @(); $franjasE = @(); $citasE = @()
+        for ($i = 0; $i -lt $pares; $i++) {
+            $s1 = Nueva-Franja 2; $s2 = Nueva-Franja 2; $franjasE += $s1, $s2
+            $pa, $pb = Nuevos-Pacientes 2
+            $ca = Reservar-Directo $pa $s1; $cb = Reservar-Directo $pb $s2; $citasE += $ca, $cb
+            $sentencias += @{ Sql = "EXEC vac.usp_ReprogramarCita $ca, $s2" }, @{ Sql = "EXEC vac.usp_ReprogramarCita $cb, $s1" }
+        }
+        $res = Disparar $sentencias
+        Verificar "E  $($pares * 2) intercambios cruzados" $res ($pares * 2) '50126' "SELECT COUNT(*) FROM vac.Cita WHERE IdHorario IN ($($franjasE -join ',')) AND Estado <> 'CANCELADA';" ($pares * 2)
         Limpiar
     }
 }

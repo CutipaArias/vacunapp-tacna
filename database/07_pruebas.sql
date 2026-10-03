@@ -938,6 +938,168 @@ END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
 IF @@TRANCOUNT > 0 ROLLBACK;
 INSERT @R VALUES ('usp_ActualizarHorario', 'Rechaza un cupo menor que las citas existentes', '50128', @Err);
 
+/* =================== Agenda: cancelar y reprogramar (RF-06; RN-16, RN-17) =================== */
+DECLARE @En23h DATETIME2(0) = DATEADD(HOUR, 23, SYSDATETIME()), @En25h DATETIME2(0) = DATEADD(HOUR, 25, SYSDATETIME());
+
+/* H21. RN-16: no se cancela con menos de 24 horas */
+BEGIN TRANSACTION;
+EXEC vac.usp_RegistrarPaciente 'DNI', '89050001', 'Prueba', 'Uno', NULL, @Nac20m, 'M', '230104', NULL, NULL, @IdPac OUTPUT;
+EXEC vac.usp_CrearHorario @Est, 'SPR', @En23h, 5, @IdHor OUTPUT;
+EXEC vac.usp_ReservarCita @IdPac, @IdHor, @IdSPR1, NULL, @IdCita OUTPUT;
+BEGIN TRY
+    EXEC vac.usp_CancelarCita @IdCita;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_CancelarCita', 'RN-16: rechaza cancelar a 23 horas', '50138', @Err);
+
+/* H22. RN-16: con 25 horas se cancela y el cupo queda libre */
+BEGIN TRANSACTION;
+EXEC vac.usp_RegistrarPaciente 'DNI', '89050001', 'Prueba', 'Uno', NULL, @Nac20m, 'M', '230104', NULL, NULL, @IdPac OUTPUT;
+EXEC vac.usp_CrearHorario @Est, 'SPR', @En25h, 5, @IdHor OUTPUT;
+EXEC vac.usp_ReservarCita @IdPac, @IdHor, @IdSPR1, NULL, @IdCita OUTPUT;
+BEGIN TRY
+    EXEC vac.usp_CancelarCita @IdCita;
+    SET @Err = CONCAT((SELECT Estado FROM vac.Cita WHERE IdCita = @IdCita), '/',
+                      (SELECT COUNT(*) FROM vac.Cita WHERE IdHorario = @IdHor AND Estado <> 'CANCELADA'));
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_CancelarCita', 'RN-16: cancela a 25 horas y libera el cupo', 'CANCELADA/0', @Err);
+
+/* H23. Una cita cancelada no se vuelve a cancelar */
+BEGIN TRANSACTION;
+EXEC vac.usp_RegistrarPaciente 'DNI', '89050001', 'Prueba', 'Uno', NULL, @Nac20m, 'M', '230104', NULL, NULL, @IdPac OUTPUT;
+EXEC vac.usp_CrearHorario @Est, 'SPR', @En25h, 5, @IdHor OUTPUT;
+EXEC vac.usp_ReservarCita @IdPac, @IdHor, @IdSPR1, NULL, @IdCita OUTPUT;
+EXEC vac.usp_CancelarCita @IdCita;
+BEGIN TRY
+    EXEC vac.usp_CancelarCita @IdCita;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_CancelarCita', 'Rechaza cancelar una cita que no está programada', '50137', @Err);
+
+/* H24. Cita inexistente */
+BEGIN TRANSACTION;
+BEGIN TRY
+    EXEC vac.usp_CancelarCita -1;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_CancelarCita', 'Rechaza una cita inexistente', '50136', @Err);
+
+/* H25. RN-17: un ciudadano no cancela la cita de un paciente no vinculado */
+BEGIN TRANSACTION;
+EXEC vac.usp_RegistrarPaciente 'DNI', '89050001', 'Prueba', 'Uno', NULL, @Nac20m, 'M', '230104', NULL, NULL, @IdPac OUTPUT;
+EXEC vac.usp_CrearHorario @Est, 'SPR', @En25h, 5, @IdHor OUTPUT;
+EXEC vac.usp_ReservarCita @IdPac, @IdHor, @IdSPR1, NULL, @IdCita OUTPUT;
+BEGIN TRY
+    EXEC vac.usp_CancelarCita @IdCita, @IdUsuCiud;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_CancelarCita', 'RN-17: rechaza a un ciudadano sin vínculo', '50127', @Err);
+
+/* H26. Reprogramar mueve la cita y libera la franja anterior */
+BEGIN TRANSACTION;
+EXEC vac.usp_RegistrarPaciente 'DNI', '89050001', 'Prueba', 'Uno', NULL, @Nac20m, 'M', '230104', NULL, NULL, @IdPac OUTPUT;
+EXEC vac.usp_CrearHorario @Est, 'SPR', @En25h, 5, @IdHor OUTPUT;
+EXEC vac.usp_CrearHorario @Est, 'SPR', @Franja, 5, @IdHor2 OUTPUT;
+EXEC vac.usp_ReservarCita @IdPac, @IdHor, @IdSPR1, NULL, @IdCita OUTPUT;
+BEGIN TRY
+    EXEC vac.usp_ReprogramarCita @IdCita, @IdHor2;
+    SET @Err = CONCAT((SELECT IdHorario FROM vac.Cita WHERE IdCita = @IdCita) - @IdHor2, '/',
+                      (SELECT Estado FROM vac.Cita WHERE IdCita = @IdCita), '/',
+                      (SELECT COUNT(*) FROM vac.Cita WHERE IdHorario = @IdHor AND Estado <> 'CANCELADA'), '/',
+                      (SELECT COUNT(*) FROM vac.Cita WHERE IdHorario = @IdHor2 AND Estado <> 'CANCELADA'));
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_ReprogramarCita', 'Mueve la cita a la nueva franja y libera la anterior', '0/PROGRAMADA/0/1', @Err);
+
+/* H27. Si la nueva franja está llena, la cita original se conserva */
+BEGIN TRANSACTION;
+EXEC vac.usp_RegistrarPaciente 'DNI', '89050001', 'Prueba', 'Uno', NULL, @Nac20m, 'M', '230104', NULL, NULL, @IdPac OUTPUT;
+EXEC vac.usp_RegistrarPaciente 'DNI', '89050002', 'Prueba', 'Dos', NULL, @Nac20m, 'F', '230104', NULL, NULL, @IdPacB OUTPUT;
+EXEC vac.usp_CrearHorario @Est, 'SPR', @En25h, 5, @IdHor OUTPUT;
+EXEC vac.usp_CrearHorario @Est, 'SPR', @Franja, 1, @IdHor2 OUTPUT;
+EXEC vac.usp_ReservarCita @IdPac, @IdHor, @IdSPR1, NULL, @IdCita OUTPUT;
+EXEC vac.usp_ReservarCita @IdPacB, @IdHor2, @IdSPR1, NULL, @IdAux OUTPUT;
+BEGIN TRY
+    EXEC vac.usp_ReprogramarCita @IdCita, @IdHor2;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH
+    SET @Err = CAST(ERROR_NUMBER() AS VARCHAR);
+END CATCH;
+SET @Err = CONCAT(@Err, '/', (SELECT IdHorario FROM vac.Cita WHERE IdCita = @IdCita) - @IdHor, '/', (SELECT Estado FROM vac.Cita WHERE IdCita = @IdCita));
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_ReprogramarCita', 'Franja llena: rechaza y conserva la cita original', '50126/0/PROGRAMADA', @Err);
+
+/* H28. RN-16: no se reprograma con menos de 24 horas */
+BEGIN TRANSACTION;
+EXEC vac.usp_RegistrarPaciente 'DNI', '89050001', 'Prueba', 'Uno', NULL, @Nac20m, 'M', '230104', NULL, NULL, @IdPac OUTPUT;
+EXEC vac.usp_CrearHorario @Est, 'SPR', @En23h, 5, @IdHor OUTPUT;
+EXEC vac.usp_CrearHorario @Est, 'SPR', @Franja, 5, @IdHor2 OUTPUT;
+EXEC vac.usp_ReservarCita @IdPac, @IdHor, @IdSPR1, NULL, @IdCita OUTPUT;
+BEGIN TRY
+    EXEC vac.usp_ReprogramarCita @IdCita, @IdHor2;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_ReprogramarCita', 'RN-16: rechaza reprogramar a 23 horas', '50138', @Err);
+
+/* H29. La nueva franja debe ser de la misma vacuna */
+BEGIN TRANSACTION;
+EXEC vac.usp_RegistrarPaciente 'DNI', '89050001', 'Prueba', 'Uno', NULL, @Nac20m, 'M', '230104', NULL, NULL, @IdPac OUTPUT;
+EXEC vac.usp_CrearHorario @Est, 'SPR', @En25h, 5, @IdHor OUTPUT;
+EXEC vac.usp_CrearHorario @Est, 'BCG', @Franja, 5, @IdHor2 OUTPUT;
+EXEC vac.usp_ReservarCita @IdPac, @IdHor, @IdSPR1, NULL, @IdCita OUTPUT;
+BEGIN TRY
+    EXEC vac.usp_ReprogramarCita @IdCita, @IdHor2;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_ReprogramarCita', 'Rechaza una franja de otra vacuna', '50122', @Err);
+
+/* H30. Reprogramar a la misma franja */
+BEGIN TRANSACTION;
+EXEC vac.usp_RegistrarPaciente 'DNI', '89050001', 'Prueba', 'Uno', NULL, @Nac20m, 'M', '230104', NULL, NULL, @IdPac OUTPUT;
+EXEC vac.usp_CrearHorario @Est, 'SPR', @En25h, 5, @IdHor OUTPUT;
+EXEC vac.usp_ReservarCita @IdPac, @IdHor, @IdSPR1, NULL, @IdCita OUTPUT;
+BEGIN TRY
+    EXEC vac.usp_ReprogramarCita @IdCita, @IdHor;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_ReprogramarCita', 'Rechaza la misma franja', '50129', @Err);
+
+/* H31. No se reprograma una cita cancelada */
+BEGIN TRANSACTION;
+EXEC vac.usp_RegistrarPaciente 'DNI', '89050001', 'Prueba', 'Uno', NULL, @Nac20m, 'M', '230104', NULL, NULL, @IdPac OUTPUT;
+EXEC vac.usp_CrearHorario @Est, 'SPR', @En25h, 5, @IdHor OUTPUT;
+EXEC vac.usp_CrearHorario @Est, 'SPR', @Franja, 5, @IdHor2 OUTPUT;
+EXEC vac.usp_ReservarCita @IdPac, @IdHor, @IdSPR1, NULL, @IdCita OUTPUT;
+EXEC vac.usp_CancelarCita @IdCita;
+BEGIN TRY
+    EXEC vac.usp_ReprogramarCita @IdCita, @IdHor2;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_ReprogramarCita', 'Rechaza reprogramar una cita cancelada', '50137', @Err);
+
+/* H32. La nueva franja inactiva se rechaza y la cita se conserva */
+BEGIN TRANSACTION;
+EXEC vac.usp_RegistrarPaciente 'DNI', '89050001', 'Prueba', 'Uno', NULL, @Nac20m, 'M', '230104', NULL, NULL, @IdPac OUTPUT;
+EXEC vac.usp_CrearHorario @Est, 'SPR', @En25h, 5, @IdHor OUTPUT;
+EXEC vac.usp_CrearHorario @Est, 'SPR', @Franja, 5, @IdHor2 OUTPUT;
+EXEC vac.usp_ActualizarHorario @IdHor2, 5, 0;
+EXEC vac.usp_ReservarCita @IdPac, @IdHor, @IdSPR1, NULL, @IdCita OUTPUT;
+BEGIN TRY
+    EXEC vac.usp_ReprogramarCita @IdCita, @IdHor2;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_ReprogramarCita', 'Rechaza una franja inactiva', '50121', @Err);
+
 SELECT Caso, IIF(Esperado = Obtenido, 'OK', 'FALLA') AS Resultado, Objeto, Prueba, Esperado, Obtenido
 FROM @R ORDER BY Caso;
 SELECT SUM(IIF(Esperado = Obtenido, 1, 0)) AS Correctas, COUNT(*) AS Total FROM @R;

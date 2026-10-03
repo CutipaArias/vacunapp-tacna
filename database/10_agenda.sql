@@ -5,7 +5,7 @@
    RN-15 la cita es para una dosis elegible no aplicada; una sola cita
          activa por dosis. RN-17 el ciudadano solo reserva para sus vinculados.
    Idempotente: se puede ejecutar varias veces sin perder datos.
-   Códigos de error de este módulo: 50120 a 50135.
+   Códigos de error de este módulo: 50120 a 50138.
    ===================================================================== */
 SET ANSI_NULLS ON;
 SET QUOTED_IDENTIFIER ON;
@@ -113,10 +113,15 @@ BEGIN
       AND (d.IdCita IS NULL OR d.Estado <> 'PROGRAMADA' OR d.IdHorario <> i.IdHorario);
     IF NOT EXISTS (SELECT 1 FROM @Nuevas) RETURN;
 
-    DECLARE @bloqueo INT;
-    SELECT @bloqueo = COUNT(*)
-    FROM vac.HorarioAtencion h WITH (UPDLOCK, HOLDLOCK)
-    WHERE h.IdHorario IN (SELECT IdHorario FROM @Nuevas);
+    -- Una búsqueda puntual por franja, en orden ascendente (el mismo orden que los procedimientos). Un solo
+    -- "WHERE IdHorario IN (...)" con HOLDLOCK se resuelve con un recorrido de rango que bloquea franjas ajenas
+    -- y provoca interbloqueos entre reprogramaciones simultáneas.
+    DECLARE @bloqueo INT, @h INT = (SELECT MIN(IdHorario) FROM @Nuevas);
+    WHILE @h IS NOT NULL
+    BEGIN
+        SELECT @bloqueo = IdHorario FROM vac.HorarioAtencion WITH (UPDLOCK, HOLDLOCK) WHERE IdHorario = @h;
+        SET @h = (SELECT MIN(IdHorario) FROM @Nuevas WHERE IdHorario > @h);
+    END
 
     IF EXISTS (SELECT 1
                FROM @Nuevas n
@@ -290,6 +295,134 @@ BEGIN
         SET @IdCita = NULL;
         -- Dos reservas de la misma dosis en franjas distintas: gana una, la otra choca con el índice único.
         IF ERROR_NUMBER() IN (2601, 2627) THROW 50125, 'El paciente ya tiene una cita activa para esta dosis.', 1;
+        THROW;
+    END CATCH;
+END
+GO
+
+/* ---------------------------------------------------------------------
+   usp_CancelarCita (RF-06, CU06, RN-16): una cita PROGRAMADA se cancela
+   hasta 24 horas antes de la franja; al cancelarse deja de ocupar cupo.
+   Orden de bloqueos común a todo el módulo: 1.º paciente+dosis
+   (sp_getapplock), 2.º franjas en orden ascendente de IdHorario.
+   --------------------------------------------------------------------- */
+CREATE OR ALTER PROCEDURE vac.usp_CancelarCita
+    @IdCita    INT,
+    @IdUsuario INT = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @propia BIT = IIF(@@TRANCOUNT = 0, 1, 0);
+    DECLARE @IdPaciente INT, @IdEsquema SMALLINT, @IdHorario INT, @Estado VARCHAR(12), @FechaHora DATETIME2(0);
+
+    BEGIN TRY
+        IF @propia = 1 BEGIN TRANSACTION;
+
+        SELECT @IdPaciente = IdPaciente, @IdEsquema = IdEsquema FROM vac.Cita WHERE IdCita = @IdCita;
+        IF @IdPaciente IS NULL THROW 50136, 'La cita no existe.', 1;
+
+        DECLARE @recurso NVARCHAR(100) = CONCAT(N'cita:', @IdPaciente, N':', @IdEsquema), @rc INT;
+        EXEC @rc = sp_getapplock @Resource = @recurso, @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 10000;
+        IF @rc < 0 THROW 50135, 'El sistema está ocupado; intente de nuevo en unos segundos.', 1;
+
+        -- Con el bloqueo del paciente+dosis, la franja y el estado de esta cita ya no pueden cambiar bajo nuestros pies.
+        SELECT @IdHorario = c.IdHorario, @Estado = c.Estado, @FechaHora = h.FechaHora
+        FROM vac.Cita c JOIN vac.HorarioAtencion h ON h.IdHorario = c.IdHorario
+        WHERE c.IdCita = @IdCita;
+
+        IF @IdUsuario IS NOT NULL
+           AND EXISTS (SELECT 1 FROM vac.Usuario WHERE IdUsuario = @IdUsuario AND IdRol = 5)
+           AND NOT EXISTS (SELECT 1 FROM vac.VinculoFamiliar WHERE IdUsuario = @IdUsuario AND IdPaciente = @IdPaciente)
+            THROW 50127, 'El paciente no está vinculado a su usuario.', 1;
+
+        IF @Estado <> 'PROGRAMADA' THROW 50137, 'Solo se puede cancelar o reprogramar una cita programada.', 1;
+        IF @FechaHora < DATEADD(HOUR, 24, SYSDATETIME())
+            THROW 50138, 'Solo se puede cancelar o reprogramar hasta 24 horas antes de la cita.', 1;
+
+        UPDATE vac.Cita SET Estado = 'CANCELADA' WHERE IdCita = @IdCita;
+
+        IF @propia = 1 COMMIT;
+    END TRY
+    BEGIN CATCH
+        IF @propia = 1 AND XACT_STATE() <> 0 ROLLBACK;
+        THROW;
+    END CATCH;
+END
+GO
+
+/* ---------------------------------------------------------------------
+   usp_ReprogramarCita (RF-06, CU06, RN-16): mueve una cita PROGRAMADA a
+   otra franja de la misma vacuna, de forma atómica: si la nueva franja
+   está llena o no es elegible, la cita original queda intacta. La regla
+   de las 24 horas se aplica a la cita original.
+   --------------------------------------------------------------------- */
+CREATE OR ALTER PROCEDURE vac.usp_ReprogramarCita
+    @IdCita         INT,
+    @IdHorarioNuevo INT,
+    @IdUsuario      INT = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @propia BIT = IIF(@@TRANCOUNT = 0, 1, 0);
+    DECLARE @IdPaciente INT, @IdEsquema SMALLINT, @IdHorario INT, @Estado VARCHAR(12), @FechaActual DATETIME2(0);
+    DECLARE @IdVacunaDosis TINYINT, @IdVacunaNueva TINYINT, @FechaNueva DATETIME2(0), @CupoNuevo SMALLINT, @ActivoNuevo BIT;
+    DECLARE @menor INT, @mayor INT, @bloqueo INT;
+
+    BEGIN TRY
+        IF @propia = 1 BEGIN TRANSACTION;
+
+        SELECT @IdPaciente = IdPaciente, @IdEsquema = IdEsquema FROM vac.Cita WHERE IdCita = @IdCita;
+        IF @IdPaciente IS NULL THROW 50136, 'La cita no existe.', 1;
+
+        -- 1.º paciente+dosis, 2.º franjas en orden ascendente de IdHorario: el mismo orden en todo el módulo.
+        DECLARE @recurso NVARCHAR(100) = CONCAT(N'cita:', @IdPaciente, N':', @IdEsquema), @rc INT;
+        EXEC @rc = sp_getapplock @Resource = @recurso, @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 10000;
+        IF @rc < 0 THROW 50135, 'El sistema está ocupado; intente de nuevo en unos segundos.', 1;
+
+        SELECT @IdHorario = c.IdHorario, @Estado = c.Estado, @FechaActual = h.FechaHora
+        FROM vac.Cita c JOIN vac.HorarioAtencion h ON h.IdHorario = c.IdHorario
+        WHERE c.IdCita = @IdCita;
+
+        IF @IdUsuario IS NOT NULL
+           AND EXISTS (SELECT 1 FROM vac.Usuario WHERE IdUsuario = @IdUsuario AND IdRol = 5)
+           AND NOT EXISTS (SELECT 1 FROM vac.VinculoFamiliar WHERE IdUsuario = @IdUsuario AND IdPaciente = @IdPaciente)
+            THROW 50127, 'El paciente no está vinculado a su usuario.', 1;
+
+        IF @Estado <> 'PROGRAMADA' THROW 50137, 'Solo se puede cancelar o reprogramar una cita programada.', 1;
+        IF @IdHorarioNuevo = @IdHorario THROW 50129, 'La nueva franja es la misma de la cita.', 1;
+        IF @FechaActual < DATEADD(HOUR, 24, SYSDATETIME())
+            THROW 50138, 'Solo se puede cancelar o reprogramar hasta 24 horas antes de la cita.', 1;
+
+        SET @menor = IIF(@IdHorario < @IdHorarioNuevo, @IdHorario, @IdHorarioNuevo);
+        SET @mayor = IIF(@IdHorario < @IdHorarioNuevo, @IdHorarioNuevo, @IdHorario);
+        SELECT @bloqueo = IdHorario FROM vac.HorarioAtencion WITH (UPDLOCK, HOLDLOCK) WHERE IdHorario = @menor;
+        SELECT @bloqueo = IdHorario FROM vac.HorarioAtencion WITH (UPDLOCK, HOLDLOCK) WHERE IdHorario = @mayor;
+
+        SELECT @IdVacunaNueva = IdVacuna, @FechaNueva = FechaHora, @CupoNuevo = CupoMaximo, @ActivoNuevo = Activo
+        FROM vac.HorarioAtencion WHERE IdHorario = @IdHorarioNuevo;
+        IF @IdVacunaNueva IS NULL THROW 50120, 'La franja no existe.', 1;
+        IF @ActivoNuevo = 0 OR @FechaNueva <= SYSDATETIME()
+            THROW 50121, 'La franja no está disponible (inactiva o ya pasó).', 1;
+
+        SELECT @IdVacunaDosis = IdVacuna FROM vac.EsquemaDosis WHERE IdEsquema = @IdEsquema;
+        IF @IdVacunaDosis <> @IdVacunaNueva THROW 50122, 'La dosis no corresponde a la vacuna de la franja.', 1;
+
+        IF NOT EXISTS (SELECT 1 FROM vac.fn_CitaElegible(@IdPaciente, @IdEsquema, CAST(@FechaNueva AS DATE)))
+            THROW 50124, 'La dosis no es elegible para el paciente en esa fecha (edad, dosis anterior, intervalo o ya aplicada).', 1;
+
+        IF (SELECT COUNT(*) FROM vac.Cita WHERE IdHorario = @IdHorarioNuevo AND Estado <> 'CANCELADA') >= @CupoNuevo
+            THROW 50126, 'La franja no tiene cupos disponibles.', 1;
+
+        UPDATE vac.Cita SET IdHorario = @IdHorarioNuevo WHERE IdCita = @IdCita;
+
+        IF @propia = 1 COMMIT;
+    END TRY
+    BEGIN CATCH
+        IF @propia = 1 AND XACT_STATE() <> 0 ROLLBACK;
         THROW;
     END CATCH;
 END

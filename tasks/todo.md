@@ -144,7 +144,7 @@ Plan: [plan.md](plan.md) · Spec: [../SPEC.md](../SPEC.md)
   - Files: `panel/Agenda/CitasEndpoints.cs`, `panel/wwwroot/reservar.html`, `panel/wwwroot/app.js`, `tests/…`
   - Deps: T4.2
 
-- [ ] **T4.4 Cancelar y reprogramar (RF-06, CU06, RN-16)** (S)
+- [x] **T4.4 Cancelar y reprogramar (RF-06, CU06, RN-16)** (S)
   - Acceptance: permitido hasta 24 h antes; liberan el cupo; reprogramar es atómico (si la nueva franja está llena, la cita original se conserva).
   - Verify: pruebas BD (23 h → rechaza, 25 h → acepta); xUnit
   - Files: `database/10_agenda.sql`, `panel/Agenda/CitasEndpoints.cs`, `tests/…`

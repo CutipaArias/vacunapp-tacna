@@ -118,6 +118,43 @@ static class CitasEndpoints
                 (int)f["IdCita"]!, (string)f["Estado"]!, (string)f["Vacuna"]!, (byte)f["NumeroDosis"]!, (string)f["Establecimiento"]!,
                 ((DateTime)f["FechaHora"]!).ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture))));
         }).RequireAuthorization(Politicas.Reserva);
+
+        app.MapPost("/api/citas/{idCita:int}/cancelar", async (int idCita, ClaimsPrincipal user, Db db) =>
+        {
+            if (!await PuedeGestionarAsync(db, user, idCita)) return Results.Forbid();
+
+            await db.ExecAsync("vac.usp_CancelarCita", ("@IdCita", idCita), ("@IdUsuario", CarneEndpoints.IdUsuario(user)));
+            return Results.Ok(new { idCita, estado = "CANCELADA" });
+        }).RequireAuthorization(Politicas.Reserva);
+
+        app.MapPost("/api/citas/{idCita:int}/reprogramar", async (int idCita, ReprogramarCita d, ClaimsPrincipal user, Db db) =>
+        {
+            if (!await PuedeGestionarAsync(db, user, idCita)) return Results.Forbid();
+
+            var nueva = (await db.QueryAsync("SELECT IdEstablecimiento FROM vac.HorarioAtencion WHERE IdHorario = @H", ("@H", d.IdHorario)))[0];
+            if (nueva.Count == 0) return Error("La franja no existe.");
+            // El personal solo mueve citas dentro de su establecimiento; el ciudadano puede elegir cualquiera.
+            if (!user.IsInRole(Roles.Ciudadano) && !Alcance.PuedeEstablecimiento(user, (short)nueva[0]["IdEstablecimiento"]!)) return Results.Forbid();
+
+            await db.ExecAsync("vac.usp_ReprogramarCita", ("@IdCita", idCita), ("@IdHorarioNuevo", d.IdHorario), ("@IdUsuario", CarneEndpoints.IdUsuario(user)));
+            return Results.Ok(new { idCita, idHorario = d.IdHorario, estado = "PROGRAMADA" });
+        }).RequireAuthorization(Politicas.Reserva);
+    }
+
+    // Una cita ajena y una inexistente reciben la misma respuesta (403): no se revela qué citas existen.
+    // Ciudadano: solo citas de sus pacientes vinculados (RN-17). Personal: solo citas de franjas de su establecimiento (RN-22).
+    static async Task<bool> PuedeGestionarAsync(Db db, ClaimsPrincipal user, int idCita)
+    {
+        var c = (await db.QueryAsync(
+            """
+            SELECT p.NumeroDocumento, h.IdEstablecimiento
+            FROM vac.Cita c JOIN vac.Paciente p ON p.IdPaciente = c.IdPaciente JOIN vac.HorarioAtencion h ON h.IdHorario = c.IdHorario
+            WHERE c.IdCita = @Id
+            """, ("@Id", idCita)))[0];
+        if (c.Count == 0) return false;
+        return user.IsInRole(Roles.Ciudadano)
+            ? await CarneEndpoints.EsHijoAsync(db, user, (string)c[0]["NumeroDocumento"]!)
+            : Alcance.PuedeEstablecimiento(user, (short)c[0]["IdEstablecimiento"]!);
     }
 
     static DateOnly? Fecha(string? texto) =>
@@ -129,3 +166,4 @@ static class CitasEndpoints
 record NuevaCita(string? Documento, string? Vacuna, int Dosis, int IdHorario);
 record FranjaLibre(int IdHorario, short IdEstablecimiento, string Establecimiento, string Distrito, string Vacuna, string FechaHora, int Libres);
 record CitaFila(int IdCita, string Estado, string Vacuna, byte NumeroDosis, string Establecimiento, string FechaHora);
+record ReprogramarCita(int IdHorario);

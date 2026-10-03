@@ -175,7 +175,7 @@ function prepararStock() {
 }
 
 // ---- Reservar cita: paciente → dosis → franja → confirmar (ciudadano, vacunador y jefe) ----
-let citaDoc = null, citaPendientes = [];
+let citaDoc = null, citaPendientes = [], citasPaciente = [], citaEditando = null;
 const diaHora = s => new Date(s).toLocaleString('es-PE', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 
 async function cargarCitas() {
@@ -209,10 +209,12 @@ async function elegirPacienteCita(doc) {
 async function cargarCitasPaciente() {
   const filas = await api('/api/citas?documento=' + encodeURIComponent(citaDoc));
   $('#t-citas').textContent = `· ${filas.length}`;
+  citasPaciente = filas;
   table($('#c-tbl'), [
     { h: 'Fecha', f: r => esc(diaHora(r.fechaHora)) }, { h: 'Dosis', f: r => `${esc(r.vacuna)} · ${esc(r.numeroDosis)}` },
     { h: 'Establecimiento', k: 'establecimiento' },
-    { h: 'Estado', f: r => `<span class="tag ${r.estado === 'PROGRAMADA' ? 'ÓPTIMA' : r.estado === 'ATENDIDA' ? 'BAJO' : 'ACEPTABLE'}">${esc(r.estado)}</span>` }
+    { h: 'Estado', f: r => `<span class="tag ${r.estado === 'PROGRAMADA' ? 'ÓPTIMA' : r.estado === 'ATENDIDA' ? 'BAJO' : 'ACEPTABLE'}">${esc(r.estado)}</span>` },
+    { h: '', f: r => r.estado === 'PROGRAMADA' ? `<button class="b sec" data-acc="reprogramar" data-id="${r.idCita}">Reprogramar</button> <button class="b sec" data-acc="cancelar" data-id="${r.idCita}">Cancelar</button>` : '' }
   ], filas);
 }
 
@@ -236,6 +238,42 @@ function prepararCitas() {
   $('#c-hijo').onchange = () => elegirPacienteCita($('#c-hijo').value);
   const recargar = () => cargarFranjasCita().catch(e => $('#c-msg').innerHTML = `<div class="msg err">${esc(e.message)}</div>`);
   $('#c-dosis').onchange = recargar; $('#c-est').onchange = recargar;
+
+  // Cancelar y reprogramar (RN-16: hasta 24 horas antes; la base lo hace cumplir).
+  const aviso = (ok, t) => $('#rep-msg').innerHTML = `<div class="msg ${ok ? 'ok' : 'err'}">${esc(t)}</div>`;
+  const refrescarCitas = async () => { await elegirPacienteCita(citaDoc); };
+  $('#c-tbl').onclick = async e => {
+    const b = e.target.closest('button[data-acc]');
+    if (!b) return;
+    const cita = citasPaciente.find(x => x.idCita === +b.dataset.id);
+    $('#rep-msg').innerHTML = '';
+    if (b.dataset.acc === 'cancelar') {
+      if (!confirm(`¿Cancelar la cita de ${cita.vacuna} del ${diaHora(cita.fechaHora)}?`)) return;
+      try { await api(`/api/citas/${cita.idCita}/cancelar`, { method: 'POST' }); await refrescarCitas(); aviso(true, 'Cita cancelada. El cupo quedó libre.'); }
+      catch (err) { aviso(false, err.message); }
+      return;
+    }
+    citaEditando = cita;
+    $('#rep-cita').textContent = `${cita.vacuna} · ${diaHora(cita.fechaHora)}`;
+    try {
+      const q = new URLSearchParams({ vacuna: cita.vacuna });
+      const f = (await api('/api/agenda/franjas?' + q)).filter(x => x.fechaHora !== cita.fechaHora || x.establecimiento !== cita.establecimiento);
+      $('#rep-franja').innerHTML = f.map(x => `<option value="${x.idHorario}">${esc(diaHora(x.fechaHora))} · ${esc(x.libres)} ${x.libres === 1 ? 'cupo' : 'cupos'} · ${esc(x.establecimiento)}</option>`).join('');
+      $('#f-rep').hidden = false;
+      if (!f.length) aviso(false, 'No hay otras franjas con cupo para esta vacuna.');
+    } catch (err) { aviso(false, err.message); }
+  };
+  $('#rep-cancelar').onclick = () => { $('#f-rep').hidden = true; citaEditando = null; };
+  $('#f-rep').onsubmit = async e => {
+    e.preventDefault();
+    if (!citaEditando || !$('#rep-franja').value) return;
+    try {
+      await api(`/api/citas/${citaEditando.idCita}/reprogramar`, json({ idHorario: +$('#rep-franja').value }));
+      $('#f-rep').hidden = true; citaEditando = null;
+      await refrescarCitas();
+      aviso(true, 'Cita reprogramada.');
+    } catch (err) { aviso(false, err.message); }   // p. ej. la franja se llenó: la cita original se conserva
+  };
   $('#b-c-reservar').onclick = async () => {
     const [vacuna, dosis] = $('#c-dosis').value.split('|');
     const b = $('#b-c-reservar'); b.disabled = true;
