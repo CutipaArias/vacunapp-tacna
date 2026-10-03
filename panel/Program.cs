@@ -70,7 +70,7 @@ app.MapGet("/api/catalogos", async () =>
           JOIN vac.Vacuna v ON v.IdVacuna = e.IdVacuna ORDER BY v.Codigo, e.NumeroDosis;
         SELECT es.IdEstablecimiento, es.Nombre, d.Nombre AS Distrito FROM vac.EstablecimientoSalud es
           JOIN vac.Distrito d ON d.IdDistrito = es.IdDistrito ORDER BY d.Nombre, es.Nombre;
-        SELECT Dni, CONCAT(Nombres, ' ', Apellidos) AS Nombre, IdEstablecimiento FROM vac.PersonalSalud WHERE Activo = 1;
+        SELECT Dni, CONCAT(Nombres, ' ', Apellidos) AS Nombre, IdEstablecimiento FROM vac.Vacunador WHERE Activo = 1;
         SELECT v.Codigo, l.NumeroLote, l.FechaVencimiento FROM vac.LoteVacuna l
           JOIN vac.Vacuna v ON v.IdVacuna = l.IdVacuna
           WHERE l.FechaVencimiento >= CAST(GETDATE() AS DATE) AND YEAR(l.FechaVencimiento) <= YEAR(GETDATE()) + 1
@@ -84,7 +84,7 @@ app.MapPost("/api/dosis", async (NuevaDosis d) =>
     var idDosis = new SqlParameter("@IdDosis", SqlDbType.BigInt) { Direction = ParameterDirection.Output };
     await db.ExecAsync("vac.usp_RegistrarDosis",
         ("@NumeroDocumento", d.Documento), ("@CodigoVacuna", d.Vacuna), ("@NumeroDosis", d.Dosis),
-        ("@NumeroLote", d.Lote), ("@IdEstablecimiento", d.IdEstablecimiento), ("@DniPersonal", d.DniPersonal),
+        ("@NumeroLote", d.Lote), ("@IdEstablecimiento", d.IdEstablecimiento), ("@DniVacunador", d.DniVacunador),
         ("@FechaAplicacion", d.Fecha), ("@IdCampana", null), ("@IdDosis", idDosis));
     return Results.Ok(new { idDosis = idDosis.Value });
 });
@@ -92,7 +92,7 @@ app.MapPost("/api/dosis", async (NuevaDosis d) =>
 
 app.Run();
 
-record NuevaDosis(string Documento, string Vacuna, byte Dosis, string Lote, short IdEstablecimiento, string DniPersonal, DateOnly? Fecha);
+record NuevaDosis(string Documento, string Vacuna, byte Dosis, string Lote, short IdEstablecimiento, string DniVacunador, DateOnly? Fecha);
 
 sealed class Db(string connectionString)
 {

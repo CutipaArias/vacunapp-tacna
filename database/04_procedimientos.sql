@@ -65,7 +65,7 @@ CREATE OR ALTER PROCEDURE vac.usp_RegistrarDosis
     @NumeroDosis       TINYINT,
     @NumeroLote        VARCHAR(20),
     @IdEstablecimiento SMALLINT,
-    @DniPersonal       CHAR(8),
+    @DniVacunador       CHAR(8),
     @FechaAplicacion   DATE = NULL,
     @IdCampana         SMALLINT = NULL,
     @IdDosis           BIGINT OUTPUT
@@ -76,7 +76,7 @@ BEGIN
 
     SET @FechaAplicacion = ISNULL(@FechaAplicacion, CAST(GETDATE() AS DATE));
 
-    DECLARE @IdPaciente INT, @IdEsquema SMALLINT, @IdLote INT, @IdPersonal INT;
+    DECLARE @IdPaciente INT, @IdEsquema SMALLINT, @IdLote INT, @IdVacunador INT;
 
     SELECT @IdPaciente = IdPaciente FROM vac.Paciente WHERE NumeroDocumento = @NumeroDocumento;
     IF @IdPaciente IS NULL
@@ -96,10 +96,10 @@ BEGIN
     IF @IdLote IS NULL
         THROW 50012, 'El lote no existe para esa vacuna.', 1;
 
-    SELECT @IdPersonal = IdPersonal
-    FROM vac.PersonalSalud
-    WHERE Dni = @DniPersonal AND IdEstablecimiento = @IdEstablecimiento AND Activo = 1;
-    IF @IdPersonal IS NULL
+    SELECT @IdVacunador = IdVacunador
+    FROM vac.Vacunador
+    WHERE Dni = @DniVacunador AND IdEstablecimiento = @IdEstablecimiento AND Activo = 1;
+    IF @IdVacunador IS NULL
         THROW 50013, 'El vacunador no pertenece al establecimiento o está inactivo.', 1;
 
     IF @IdCampana IS NOT NULL AND NOT EXISTS (
@@ -110,8 +110,8 @@ BEGIN
     IF EXISTS (SELECT 1 FROM vac.DosisAplicada WHERE IdPaciente = @IdPaciente AND IdEsquema = @IdEsquema)
         THROW 50015, 'Esta dosis ya fue registrada para el paciente.', 1;
 
-    INSERT INTO vac.DosisAplicada (IdPaciente, IdEsquema, IdLote, IdEstablecimiento, IdPersonal, IdCampana, FechaAplicacion)
-    VALUES (@IdPaciente, @IdEsquema, @IdLote, @IdEstablecimiento, @IdPersonal, @IdCampana, @FechaAplicacion);
+    INSERT INTO vac.DosisAplicada (IdPaciente, IdEsquema, IdLote, IdEstablecimiento, IdVacunador, IdCampana, FechaAplicacion)
+    VALUES (@IdPaciente, @IdEsquema, @IdLote, @IdEstablecimiento, @IdVacunador, @IdCampana, @FechaAplicacion);
 
     SET @IdDosis = SCOPE_IDENTITY();
 END

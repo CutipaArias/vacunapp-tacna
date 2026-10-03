@@ -253,7 +253,7 @@ function prepararRegistro(doc, pendientes) {
     try {
       const r = await api('/api/dosis', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
         documento: doc, vacuna, dosis: +dosis, lote: $('#r-lote').value, idEstablecimiento: +$('#r-est').value,
-        dniPersonal: $('#r-per').value, fecha: $('#r-fec').value || null }) });
+        dniVacunador: $('#r-per').value, fecha: $('#r-fec').value || null }) });
       await buscarPaciente();
       $('#r-msg').innerHTML = `<div class="msg ok">Dosis registrada (Id ${r.idDosis}). Las alertas asociadas se cerraron automáticamente.</div>`;
     } catch (e) { $('#r-msg').innerHTML = `<div class="msg err">${esc(e.message)}</div>`; }

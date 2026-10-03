@@ -71,7 +71,7 @@ BEGIN
 
     IF EXISTS (SELECT 1
                FROM inserted i
-               JOIN vac.PersonalSalud ps ON ps.IdPersonal = i.IdPersonal
+               JOIN vac.Vacunador ps ON ps.IdVacunador = i.IdVacunador
                WHERE ps.IdEstablecimiento <> i.IdEstablecimiento)
         THROW 50105, 'El vacunador no pertenece al establecimiento indicado.', 1;
 END
@@ -190,11 +190,11 @@ BEGIN
     INSERT INTO vac.AuditoriaDosis (IdDosis, Operacion, DatosAnteriores, DatosNuevos)
     SELECT d.IdDosis,
            CASE WHEN i.IdDosis IS NULL THEN 'D' ELSE 'U' END,
-           (SELECT d.IdPaciente, d.IdEsquema, d.IdLote, d.IdEstablecimiento, d.IdPersonal,
+           (SELECT d.IdPaciente, d.IdEsquema, d.IdLote, d.IdEstablecimiento, d.IdVacunador,
                    d.IdCampana, d.FechaAplicacion
             FOR JSON PATH, WITHOUT_ARRAY_WRAPPER),
            CASE WHEN i.IdDosis IS NOT NULL THEN
-               (SELECT i.IdPaciente, i.IdEsquema, i.IdLote, i.IdEstablecimiento, i.IdPersonal,
+               (SELECT i.IdPaciente, i.IdEsquema, i.IdLote, i.IdEstablecimiento, i.IdVacunador,
                        i.IdCampana, i.FechaAplicacion
                 FOR JSON PATH, WITHOUT_ARRAY_WRAPPER)
            END

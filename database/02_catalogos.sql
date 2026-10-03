@@ -169,13 +169,13 @@ FROM (VALUES
 ) AS x (Ubigeo, Orden, Nombre, Categoria)
 JOIN vac.Distrito d ON d.Ubigeo = x.Ubigeo;
 
-/* Personal de salud (SIMULADO): dos vacunadores por establecimiento. */
+/* Vacunadores (SIMULADO): dos vacunadores por establecimiento. */
 DECLARE @Nombres TABLE (N TINYINT PRIMARY KEY, Nombre VARCHAR(30));
 INSERT INTO @Nombres VALUES (0,'Rosa'),(1,'Carmen'),(2,'Luis'),(3,'Milagros'),(4,'Jorge'),(5,'Ana'),(6,'Víctor'),(7,'Gladys'),(8,'Edwin'),(9,'Silvia');
 DECLARE @Apellidos TABLE (N TINYINT PRIMARY KEY, Apellido VARCHAR(40));
 INSERT INTO @Apellidos VALUES (0,'Mamani Quispe'),(1,'Condori Flores'),(2,'Ticona Choque'),(3,'Apaza Laura'),(4,'Chambilla Pari'),(5,'Coaquira Ramos'),(6,'Vargas Cutipa'),(7,'Huanca Nina'),(8,'Limache Copa'),(9,'Calizaya Ale'),(10,'Rojas Valdivia');
 
-INSERT INTO vac.PersonalSalud (Dni, Nombres, Apellidos, Cargo, IdEstablecimiento)
+INSERT INTO vac.Vacunador (Dni, Nombres, Apellidos, Cargo, IdEstablecimiento)
 SELECT CAST(40000000 + e.IdEstablecimiento * 10 + k.K AS CHAR(8)),
        n.Nombre, a.Apellido,
        CASE k.K WHEN 1 THEN 'Enfermera(o)' ELSE 'Técnico(a) en enfermería' END,

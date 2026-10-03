@@ -58,19 +58,19 @@ CREATE TABLE vac.EstablecimientoSalud (
     CONSTRAINT CK_Establecimiento_Categoria CHECK (Categoria IN ('I-1','I-2','I-3','I-4','II-1','II-2','III-1'))
 );
 
-CREATE TABLE vac.PersonalSalud (
-    IdPersonal        INT          NOT NULL IDENTITY(1,1),
+CREATE TABLE vac.Vacunador (
+    IdVacunador        INT          NOT NULL IDENTITY(1,1),
     Dni               CHAR(8)      NOT NULL,
     Nombres           VARCHAR(60)  NOT NULL,
     Apellidos         VARCHAR(80)  NOT NULL,
     Cargo             VARCHAR(30)  NOT NULL,
     IdEstablecimiento SMALLINT     NOT NULL,
-    Activo            BIT          NOT NULL CONSTRAINT DF_Personal_Activo DEFAULT (1),
-    CONSTRAINT PK_PersonalSalud PRIMARY KEY (IdPersonal),
-    CONSTRAINT UQ_Personal_Dni UNIQUE (Dni),
-    CONSTRAINT FK_Personal_Establecimiento FOREIGN KEY (IdEstablecimiento) REFERENCES vac.EstablecimientoSalud (IdEstablecimiento),
-    CONSTRAINT CK_Personal_Dni CHECK (Dni NOT LIKE '%[^0-9]%'),
-    CONSTRAINT CK_Personal_Cargo CHECK (Cargo IN ('Enfermera(o)','Técnico(a) en enfermería','Médico(a)','Obstetra'))
+    Activo            BIT          NOT NULL CONSTRAINT DF_Vacunador_Activo DEFAULT (1),
+    CONSTRAINT PK_Vacunador PRIMARY KEY (IdVacunador),
+    CONSTRAINT UQ_Vacunador_Dni UNIQUE (Dni),
+    CONSTRAINT FK_Vacunador_Establecimiento FOREIGN KEY (IdEstablecimiento) REFERENCES vac.EstablecimientoSalud (IdEstablecimiento),
+    CONSTRAINT CK_Vacunador_Dni CHECK (Dni NOT LIKE '%[^0-9]%'),
+    CONSTRAINT CK_Vacunador_Cargo CHECK (Cargo IN ('Enfermera(o)','Técnico(a) en enfermería','Médico(a)','Obstetra'))
 );
 
 /* ---------------------------------------------------------------------
@@ -210,7 +210,7 @@ CREATE TABLE vac.DosisAplicada (
     IdEsquema         SMALLINT     NOT NULL,
     IdLote            INT          NOT NULL,
     IdEstablecimiento SMALLINT     NOT NULL,
-    IdPersonal        INT          NOT NULL,
+    IdVacunador        INT          NOT NULL,
     IdCampana         SMALLINT     NULL,
     FechaAplicacion   DATE         NOT NULL,
     FechaRegistro     DATETIME2(0) NOT NULL CONSTRAINT DF_Dosis_FechaRegistro DEFAULT (SYSDATETIME()),
@@ -220,7 +220,7 @@ CREATE TABLE vac.DosisAplicada (
     CONSTRAINT FK_Dosis_Esquema FOREIGN KEY (IdEsquema) REFERENCES vac.EsquemaDosis (IdEsquema),
     CONSTRAINT FK_Dosis_Lote FOREIGN KEY (IdLote) REFERENCES vac.LoteVacuna (IdLote),
     CONSTRAINT FK_Dosis_Establecimiento FOREIGN KEY (IdEstablecimiento) REFERENCES vac.EstablecimientoSalud (IdEstablecimiento),
-    CONSTRAINT FK_Dosis_Personal FOREIGN KEY (IdPersonal) REFERENCES vac.PersonalSalud (IdPersonal),
+    CONSTRAINT FK_Dosis_Vacunador FOREIGN KEY (IdVacunador) REFERENCES vac.Vacunador (IdVacunador),
     CONSTRAINT FK_Dosis_Campana FOREIGN KEY (IdCampana) REFERENCES vac.Campana (IdCampana)
 );
 

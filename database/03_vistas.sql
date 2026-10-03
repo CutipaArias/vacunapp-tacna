@@ -229,7 +229,7 @@ AS
     JOIN vac.Vacuna v                ON v.IdVacuna           = e.IdVacuna
     JOIN vac.LoteVacuna l            ON l.IdLote             = da.IdLote
     JOIN vac.EstablecimientoSalud es ON es.IdEstablecimiento = da.IdEstablecimiento
-    JOIN vac.PersonalSalud ps        ON ps.IdPersonal        = da.IdPersonal
+    JOIN vac.Vacunador ps        ON ps.IdVacunador        = da.IdVacunador
     LEFT JOIN vac.Campana c          ON c.IdCampana          = da.IdCampana;
 GO
 

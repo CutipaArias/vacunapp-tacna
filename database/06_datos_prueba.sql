@@ -135,9 +135,9 @@ SELECT IdEstablecimiento, IdDistrito,
        COUNT(*)     OVER (PARTITION BY IdDistrito) AS Cnt
 INTO #Est FROM vac.EstablecimientoSalud;
 
-SELECT IdPersonal, IdEstablecimiento,
-       ROW_NUMBER() OVER (PARTITION BY IdEstablecimiento ORDER BY IdPersonal) AS Rn
-INTO #Per FROM vac.PersonalSalud;
+SELECT IdVacunador, IdEstablecimiento,
+       ROW_NUMBER() OVER (PARTITION BY IdEstablecimiento ORDER BY IdVacunador) AS Rn
+INTO #Per FROM vac.Vacunador;
 
 /* Campaña 1: todos los distritos. Campaña 2 (barrido SPR): provincia Tacna. */
 SELECT c.IdCampana, c.FechaInicio, c.FechaFin, d.IdDistrito
@@ -192,8 +192,8 @@ BEGIN
        OR (c.EdadMaximaMeses IS NOT NULL AND vac.fn_EdadMeses(c.FechaNacimiento, c.Fecha) > c.EdadMaximaMeses)
        OR c.RProb >= CASE WHEN c.Codigo = 'SPR' THEN d.ProbSPR ELSE d.Prob END;
 
-    INSERT INTO vac.DosisAplicada (IdPaciente, IdEsquema, IdLote, IdEstablecimiento, IdPersonal, IdCampana, FechaAplicacion)
-    SELECT c.IdPaciente, c.IdEsquema, l.IdLote, es.IdEstablecimiento, pe.IdPersonal, camp.IdCampana, c.Fecha
+    INSERT INTO vac.DosisAplicada (IdPaciente, IdEsquema, IdLote, IdEstablecimiento, IdVacunador, IdCampana, FechaAplicacion)
+    SELECT c.IdPaciente, c.IdEsquema, l.IdLote, es.IdEstablecimiento, pe.IdVacunador, camp.IdCampana, c.Fecha
     FROM #Cand c
     JOIN #Est es ON es.IdDistrito = c.IdDistrito AND es.Rn = c.RSel % es.Cnt + 1
     JOIN #Per pe ON pe.IdEstablecimiento = es.IdEstablecimiento AND pe.Rn = c.RSel % 2 + 1
@@ -228,8 +228,8 @@ WHERE NOT EXISTS (SELECT 1 FROM vac.DosisAplicada da WHERE da.IdPaciente = p.IdP
 DELETE FROM #Barrido
 WHERE RProb >= 4500 OR Fecha > @Hoy OR vac.fn_EdadMeses(FechaNacimiento, Fecha) < 12;
 
-INSERT INTO vac.DosisAplicada (IdPaciente, IdEsquema, IdLote, IdEstablecimiento, IdPersonal, IdCampana, FechaAplicacion)
-SELECT c.IdPaciente, @IdSPR1, l.IdLote, es.IdEstablecimiento, pe.IdPersonal, 2, c.Fecha
+INSERT INTO vac.DosisAplicada (IdPaciente, IdEsquema, IdLote, IdEstablecimiento, IdVacunador, IdCampana, FechaAplicacion)
+SELECT c.IdPaciente, @IdSPR1, l.IdLote, es.IdEstablecimiento, pe.IdVacunador, 2, c.Fecha
 FROM #Barrido c
 JOIN #Est es ON es.IdDistrito = c.IdDistrito AND es.Rn = c.RSel % es.Cnt + 1
 JOIN #Per pe ON pe.IdEstablecimiento = es.IdEstablecimiento AND pe.Rn = c.RSel % 2 + 1

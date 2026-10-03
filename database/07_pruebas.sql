@@ -17,14 +17,14 @@ DECLARE @R TABLE (Caso INT IDENTITY, Objeto VARCHAR(40), Prueba VARCHAR(120), Es
 DECLARE @Hoy DATE = CAST(GETDATE() AS DATE);
 DECLARE @Nac20m DATE = DATEADD(MONTH, -20, @Hoy);
 DECLARE @IdPac INT, @IdAux INT, @IdDosis BIGINT, @IdBrote INT, @n INT, @Err VARCHAR(200);
-DECLARE @Est SMALLINT, @Dni CHAR(8), @IdPersonal INT, @IdSPR1 SMALLINT;
+DECLARE @Est SMALLINT, @Dni CHAR(8), @IdVacunador INT, @IdSPR1 SMALLINT;
 DECLARE @LoteSPR VARCHAR(20)        = CONCAT('SPR-', YEAR(@Hoy), '-1');
 DECLARE @LoteSPRVencido VARCHAR(20) = CONCAT('SPR-', YEAR(@Hoy) - 11, '-1');
 
-SELECT TOP (1) @Est = es.IdEstablecimiento, @Dni = ps.Dni, @IdPersonal = ps.IdPersonal
+SELECT TOP (1) @Est = es.IdEstablecimiento, @Dni = ps.Dni, @IdVacunador = ps.IdVacunador
 FROM vac.EstablecimientoSalud es
 JOIN vac.Distrito d       ON d.IdDistrito = es.IdDistrito
-JOIN vac.PersonalSalud ps ON ps.IdEstablecimiento = es.IdEstablecimiento
+JOIN vac.Vacunador ps ON ps.IdEstablecimiento = es.IdEstablecimiento
 WHERE d.Ubigeo = '230104';
 
 SELECT @IdSPR1 = e.IdEsquema
@@ -86,8 +86,8 @@ INSERT @R VALUES ('trg_DosisAplicada_Validar', 'Rechaza lote vencido', '50101', 
 BEGIN TRANSACTION;
 EXEC vac.usp_RegistrarPaciente 'DNI', '89000001', 'Prueba', 'Uno', NULL, @Nac20m, 'M', '230104', NULL, NULL, @IdPac OUTPUT;
 BEGIN TRY
-    INSERT INTO vac.DosisAplicada (IdPaciente, IdEsquema, IdLote, IdEstablecimiento, IdPersonal, FechaAplicacion)
-    VALUES (@IdPac, @IdSPR1, (SELECT TOP (1) IdLote FROM vac.LoteVacuna WHERE NumeroLote LIKE 'BCG-%'), @Est, @IdPersonal, @Hoy);
+    INSERT INTO vac.DosisAplicada (IdPaciente, IdEsquema, IdLote, IdEstablecimiento, IdVacunador, FechaAplicacion)
+    VALUES (@IdPac, @IdSPR1, (SELECT TOP (1) IdLote FROM vac.LoteVacuna WHERE NumeroLote LIKE 'BCG-%'), @Est, @IdVacunador, @Hoy);
     SET @Err = 'sin error';
 END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
 IF @@TRANCOUNT > 0 ROLLBACK;
@@ -107,9 +107,9 @@ INSERT @R VALUES ('trg_DosisAplicada_Validar', 'Rechaza SPR en recién nacido', 
 BEGIN TRANSACTION;
 EXEC vac.usp_RegistrarPaciente 'DNI', '89000001', 'Prueba', 'Uno', NULL, @Nac20m, 'M', '230104', NULL, NULL, @IdPac OUTPUT;
 BEGIN TRY
-    INSERT INTO vac.DosisAplicada (IdPaciente, IdEsquema, IdLote, IdEstablecimiento, IdPersonal, FechaAplicacion)
+    INSERT INTO vac.DosisAplicada (IdPaciente, IdEsquema, IdLote, IdEstablecimiento, IdVacunador, FechaAplicacion)
     VALUES (@IdPac, @IdSPR1, (SELECT IdLote FROM vac.LoteVacuna WHERE NumeroLote = @LoteSPR), @Est,
-            (SELECT TOP (1) IdPersonal FROM vac.PersonalSalud WHERE IdEstablecimiento <> @Est), @Hoy);
+            (SELECT TOP (1) IdVacunador FROM vac.Vacunador WHERE IdEstablecimiento <> @Est), @Hoy);
     SET @Err = 'sin error';
 END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
 IF @@TRANCOUNT > 0 ROLLBACK;
