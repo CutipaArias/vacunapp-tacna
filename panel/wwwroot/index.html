@@ -23,6 +23,7 @@
   <button data-tab="alertas" data-roles="ADMINISTRADOR EPIDEMIOLOGO" hidden>Alertas</button>
   <button data-tab="campanas" data-roles="ADMINISTRADOR EPIDEMIOLOGO" hidden>Campañas</button>
   <button data-tab="paciente" data-roles="ADMINISTRADOR EPIDEMIOLOGO JEFE_ESTABLECIMIENTO VACUNADOR CIUDADANO" hidden>Paciente</button>
+  <button data-tab="stock" data-roles="JEFE_ESTABLECIMIENTO" hidden>Stock</button>
   <button data-tab="usuarios" data-roles="ADMINISTRADOR" hidden>Usuarios</button>
   <button data-tab="auditoria" data-roles="ADMINISTRADOR" hidden>Auditoría</button>
 </nav>
@@ -124,6 +125,40 @@
         <button class="b" id="b-aud">Consultar</button>
       </div>
       <div class="tbl"><table id="aud"></table></div>
+    </div>
+  </section>
+
+  <section id="stock">
+    <div class="card">
+      <h2>Alertas de stock <span class="time" id="t-stk-ale"></span></h2>
+      <p>Stock en o bajo el umbral mínimo y lotes que vencen en 30 días o menos. Se cierran solas al reponer el stock.</p>
+      <div class="tbl"><table id="stk-ale"></table></div>
+    </div>
+    <div class="card">
+      <h2>Stock de mi establecimiento <span class="time" id="t-stk"></span></h2>
+      <div class="tbl"><table id="stk-tbl"></table></div>
+      <form class="filters" id="f-aj" autocomplete="off" hidden>
+        <strong id="aj-lote"></strong>
+        <label>Cantidad contada <input id="aj-cant" type="number" min="0" max="1000000" required></label>
+        <label>Motivo <input id="aj-mot" maxlength="200" required></label>
+        <button class="b" type="submit">Ajustar</button>
+        <button class="b sec" type="button" id="aj-cancelar">Cancelar</button>
+      </form>
+      <div id="aj-msg" role="alert"></div>
+    </div>
+    <div class="card">
+      <h2>Ingresar lote</h2>
+      <p>Registra la llegada de un lote a su establecimiento. Si el lote ya existe, la cantidad se suma y el vencimiento debe coincidir.</p>
+      <form class="filters" id="f-ing" autocomplete="off">
+        <label>Vacuna <select id="i-vac"></select></label>
+        <label>Número de lote <input id="i-lote" maxlength="20" required></label>
+        <label>Laboratorio <input id="i-lab" maxlength="50" required></label>
+        <label>Vencimiento <input id="i-ven" type="date" required></label>
+        <label>Cantidad <input id="i-cant" type="number" min="1" max="1000000" required></label>
+        <label>Umbral mínimo <input id="i-umb" type="number" min="0" max="1000000" placeholder="sin cambio"></label>
+        <button class="b" type="submit">Ingresar</button>
+      </form>
+      <div id="i-msg" role="alert"></div>
     </div>
   </section>
 

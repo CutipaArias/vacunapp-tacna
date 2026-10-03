@@ -20,6 +20,8 @@ static class Politicas
     /// <summary>Quien aplica o supervisa la vacunación en un establecimiento: vacunador, jefe y los roles regionales.</summary>
     public const string ConsultaClinica = nameof(ConsultaClinica);
     public const string Vacunador = nameof(Vacunador);
+    /// <summary>Gestión de stock y horarios de un establecimiento: solo el jefe de ese establecimiento.</summary>
+    public const string Jefe = nameof(Jefe);
     public const string Administrador = nameof(Administrador);
     public const string Ciudadano = nameof(Ciudadano);
 
@@ -30,6 +32,7 @@ static class Politicas
         o.AddPolicy(Regional, p => p.RequireRole(Roles.Administrador, Roles.Epidemiologo));
         o.AddPolicy(ConsultaClinica, p => p.RequireRole(Roles.Administrador, Roles.Epidemiologo, Roles.Jefe, Roles.Vacunador));
         o.AddPolicy(Vacunador, p => p.RequireRole(Roles.Vacunador));
+        o.AddPolicy(Jefe, p => p.RequireRole(Roles.Jefe));
         o.AddPolicy(Administrador, p => p.RequireRole(Roles.Administrador));
         o.AddPolicy(Ciudadano, p => p.RequireRole(Roles.Ciudadano));
     }

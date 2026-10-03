@@ -25,7 +25,7 @@ const tag = v => `<span class="tag ${esc(v)}">${esc(v)}</span>`;
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
   document.querySelectorAll('nav button, section').forEach(x => x.classList.remove('on'));
   b.classList.add('on'); $('#' + b.dataset.tab).classList.add('on');
-  ({ cobertura: cargarCobertura, alertas: cargarAlertas, campanas: cargarCampanas, usuarios: cargarUsuarios, auditoria: cargarAuditoria })[b.dataset.tab]?.();
+  ({ cobertura: cargarCobertura, alertas: cargarAlertas, campanas: cargarCampanas, stock: cargarStock, usuarios: cargarUsuarios, auditoria: cargarAuditoria })[b.dataset.tab]?.();
 });
 
 async function cargarResumen() {
@@ -115,6 +115,62 @@ function prepararRegistro(doc, pendientes) {
       await buscarPaciente();
       $('#r-msg').innerHTML = `<div class="msg ok">Dosis registrada (Id ${r.idDosis}). Las alertas asociadas se cerraron automáticamente.</div>`;
     } catch (e) { $('#r-msg').innerHTML = `<div class="msg err">${esc(e.message)}</div>`; }
+  };
+}
+
+// ---- Stock del establecimiento (solo JEFE_ESTABLECIMIENTO) ----
+const json = cuerpo => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo) });
+const TIPOS_ALERTA = { STOCK_BAJO: 'Stock bajo', LOTE_POR_VENCER: 'Lote por vencer' };
+let stock = [];
+
+async function cargarStock() {
+  const [alertas, filas] = await Promise.all([api('/api/stock/alertas'), api('/api/stock')]);   // alertas primero: calcula los vencimientos
+  stock = filas;
+  $('#t-stk-ale').textContent = `· ${alertas.length} pendientes`;
+  table($('#stk-ale'), [
+    { h: 'Alerta', f: r => esc(TIPOS_ALERTA[r.tipoAlerta] ?? r.tipoAlerta) }, { h: 'Vacuna', k: 'vacuna' }, { h: 'Lote', k: 'numeroLote' },
+    { h: 'Vence', f: r => fecha(r.fechaVencimiento) }, { h: 'Existencias', n: 1, f: r => fmt(r.cantidad) }, { h: 'Umbral', n: 1, f: r => fmt(r.umbralMinimo) }
+  ], alertas);
+  $('#t-stk').textContent = `· ${filas.length} lotes · ${filas.__ms} ms`;
+  table($('#stk-tbl'), [
+    { h: 'Vacuna', k: 'vacuna' }, { h: 'Lote', k: 'numeroLote' }, { h: 'Laboratorio', k: 'laboratorio' },
+    { h: 'Vence', f: r => fecha(r.fechaVencimiento) }, { h: 'Existencias', n: 1, f: r => fmt(r.cantidad) }, { h: 'Umbral', n: 1, f: r => fmt(r.umbralMinimo) },
+    { h: 'Estado', f: r => r.bajoUmbral ? '<span class="tag CRÍTICA">Bajo</span>' : '<span class="tag ÓPTIMA">Normal</span>' },
+    { h: '', f: r => `<button class="b sec" data-id="${r.idStock}">Ajustar</button>` }
+  ], filas);
+}
+
+function prepararStock() {
+  $('#i-vac').innerHTML = [...new Set(cat.esquema.map(e => e.Codigo))].map(c => `<option>${esc(c)}</option>`).join('');
+  $('#f-ing').onsubmit = async e => {
+    e.preventDefault();
+    try {
+      await api('/api/stock/ingresos', json({
+        vacuna: $('#i-vac').value, numeroLote: $('#i-lote').value.trim(), laboratorio: $('#i-lab').value.trim(),
+        fechaVencimiento: $('#i-ven').value, cantidad: +$('#i-cant').value, umbralMinimo: $('#i-umb').value === '' ? null : +$('#i-umb').value }));
+      $('#i-msg').innerHTML = '<div class="msg ok">Lote ingresado.</div>';
+      $('#f-ing').reset();
+      await cargarStock();
+    } catch (err) { $('#i-msg').innerHTML = `<div class="msg err">${esc(err.message)}</div>`; }
+  };
+  let ajustando = null;
+  $('#stk-tbl').onclick = e => {
+    const b = e.target.closest('button[data-id]');
+    if (!b) return;
+    ajustando = stock.find(x => x.idStock === +b.dataset.id);
+    $('#aj-lote').textContent = `${ajustando.vacuna} · lote ${ajustando.numeroLote} (hay ${fmt(ajustando.cantidad)})`;
+    $('#aj-cant').value = ajustando.cantidad; $('#aj-mot').value = '';
+    $('#f-aj').hidden = false; $('#aj-msg').innerHTML = ''; $('#aj-cant').focus();
+  };
+  $('#aj-cancelar').onclick = () => { $('#f-aj').hidden = true; ajustando = null; };
+  $('#f-aj').onsubmit = async e => {
+    e.preventDefault();
+    try {
+      await api('/api/stock/ajustes', json({ idStock: ajustando.idStock, cantidadNueva: +$('#aj-cant').value, motivo: $('#aj-mot').value.trim() }));
+      $('#f-aj').hidden = true; ajustando = null;
+      $('#aj-msg').innerHTML = '<div class="msg ok">Existencia ajustada.</div>';
+      await cargarStock();
+    } catch (err) { $('#aj-msg').innerHTML = `<div class="msg err">${esc(err.message)}</div>`; }
   };
 }
 
@@ -260,6 +316,7 @@ async function init() {
     .map(e => `<option value="${e.IdEstablecimiento}">${esc(e.Nombre)} (${esc(e.Distrito)})</option>`).join('');
   $('#b-cob').onclick = cargarCobertura; $('#b-ale').onclick = cargarAlertas; $('#b-pac').onclick = buscarPaciente;
   $('#p-doc').onkeydown = e => e.key === 'Enter' && buscarPaciente();
+  if (tabs.includes('stock')) prepararStock();
   if (tabs.includes('usuarios')) prepararUsuarios();
   if (tabs.includes('auditoria')) $('#b-aud').onclick = cargarAuditoria;
   if (yo.rol === 'VACUNADOR') prepararAltaPaciente();

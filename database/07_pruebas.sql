@@ -581,6 +581,128 @@ END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
 IF @@TRANCOUNT > 0 ROLLBACK;
 INSERT @R VALUES ('vw_ResumenGeneral', 'Las alertas de stock no cuentan como alertas de pacientes', 'OK', @Err);
 
+/* =================== Gestión de stock: ingreso de lotes y ajustes (RF-09) =================== */
+
+/* G1. El ingreso de un lote nuevo crea el lote, la existencia, el umbral y el movimiento ENTRADA */
+BEGIN TRANSACTION;
+BEGIN TRY
+    DECLARE @IdSt INT;
+    EXEC vac.usp_IngresarLote @Est, 'SPR', 'PRB-NUEVO-1', 'Laboratorio de prueba', '2099-12-31', 100, 20, @IdSt OUTPUT;
+    SET @Err = CONCAT((SELECT Cantidad FROM vac.StockLote WHERE IdStock = @IdSt), '/',
+                      (SELECT UmbralMinimo FROM vac.StockLote WHERE IdStock = @IdSt), '/',
+                      (SELECT COUNT(*) FROM vac.MovimientoStock WHERE IdStock = @IdSt AND Tipo = 'ENTRADA' AND Cantidad = 100));
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_IngresarLote', 'Crea lote, existencia, umbral y movimiento', '100/20/1', @Err);
+
+/* G2. Un segundo ingreso del mismo lote suma a la existencia */
+BEGIN TRANSACTION;
+BEGIN TRY
+    EXEC vac.usp_IngresarLote @Est, 'SPR', 'PRB-NUEVO-1', 'Laboratorio de prueba', '2099-12-31', 100, 20, @IdSt OUTPUT;
+    EXEC vac.usp_IngresarLote @Est, 'SPR', 'PRB-NUEVO-1', 'Laboratorio de prueba', '2099-12-31', 50, NULL, @IdSt OUTPUT;
+    SET @Err = CONCAT((SELECT Cantidad FROM vac.StockLote WHERE IdStock = @IdSt), '/',
+                      (SELECT UmbralMinimo FROM vac.StockLote WHERE IdStock = @IdSt), '/',
+                      (SELECT COUNT(*) FROM vac.MovimientoStock WHERE IdStock = @IdSt AND Tipo = 'ENTRADA'));
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_IngresarLote', 'Un segundo ingreso suma y conserva el umbral', '150/20/2', @Err);
+
+/* G3. Cantidad cero o negativa */
+BEGIN TRANSACTION;
+BEGIN TRY
+    EXEC vac.usp_IngresarLote @Est, 'SPR', 'PRB-NUEVO-2', 'Lab', '2099-12-31', 0, NULL, @IdSt OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_IngresarLote', 'Rechaza cantidad cero', '50108', @Err);
+
+/* G4. Vacuna inexistente */
+BEGIN TRANSACTION;
+BEGIN TRY
+    EXEC vac.usp_IngresarLote @Est, 'XXX', 'PRB-NUEVO-2', 'Lab', '2099-12-31', 10, NULL, @IdSt OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_IngresarLote', 'Rechaza vacuna inexistente', '50109', @Err);
+
+/* G5. El mismo número de lote con otro vencimiento */
+BEGIN TRANSACTION;
+BEGIN TRY
+    EXEC vac.usp_IngresarLote @Est, 'SPR', 'PRB-NUEVO-1', 'Lab', '2099-12-31', 10, NULL, @IdSt OUTPUT;
+    EXEC vac.usp_IngresarLote @Est, 'SPR', 'PRB-NUEVO-1', 'Lab', '2098-12-31', 10, NULL, @IdSt OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_IngresarLote', 'Rechaza el mismo lote con otro vencimiento', '50110', @Err);
+
+/* G6. No se ingresa un lote ya vencido */
+BEGIN TRANSACTION;
+BEGIN TRY
+    EXEC vac.usp_IngresarLote @Est, 'SPR', 'PRB-NUEVO-3', 'Lab', '2020-01-01', 10, NULL, @IdSt OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_IngresarLote', 'Rechaza un lote vencido', '50111', @Err);
+
+/* G7. Umbral negativo */
+BEGIN TRANSACTION;
+BEGIN TRY
+    EXEC vac.usp_IngresarLote @Est, 'SPR', 'PRB-NUEVO-2', 'Lab', '2099-12-31', 10, -1, @IdSt OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_IngresarLote', 'Rechaza umbral negativo', '50112', @Err);
+
+/* G8. Un ajuste fija la cantidad contada y deja el movimiento AJUSTE con la diferencia */
+BEGIN TRANSACTION;
+BEGIN TRY
+    EXEC vac.usp_IngresarLote @Est, 'SPR', 'PRB-NUEVO-1', 'Lab', '2099-12-31', 100, 20, @IdSt OUTPUT;
+    EXEC vac.usp_AjustarStock @IdSt, 90, 'Conteo físico';
+    SET @Err = CONCAT((SELECT Cantidad FROM vac.StockLote WHERE IdStock = @IdSt), '/',
+                      (SELECT Cantidad FROM vac.MovimientoStock WHERE IdStock = @IdSt AND Tipo = 'AJUSTE'));
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_AjustarStock', 'Fija la cantidad y registra la diferencia', '90/-10', @Err);
+
+/* G9. Ajuste a una cantidad negativa */
+BEGIN TRANSACTION;
+BEGIN TRY
+    EXEC vac.usp_IngresarLote @Est, 'SPR', 'PRB-NUEVO-1', 'Lab', '2099-12-31', 100, 20, @IdSt OUTPUT;
+    EXEC vac.usp_AjustarStock @IdSt, -5, 'Conteo físico';
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_AjustarStock', 'Rechaza una cantidad negativa', '50113', @Err);
+
+/* G10. Ajuste sin motivo */
+BEGIN TRANSACTION;
+BEGIN TRY
+    EXEC vac.usp_IngresarLote @Est, 'SPR', 'PRB-NUEVO-1', 'Lab', '2099-12-31', 100, 20, @IdSt OUTPUT;
+    EXEC vac.usp_AjustarStock @IdSt, 90, '   ';
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_AjustarStock', 'Exige el motivo', '50114', @Err);
+
+/* G11. Ajuste de una existencia inexistente */
+BEGIN TRANSACTION;
+BEGIN TRY
+    EXEC vac.usp_AjustarStock -1, 10, 'Conteo físico';
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_AjustarStock', 'Rechaza una existencia inexistente', '50115', @Err);
+
+/* G12. Ajuste a la misma cantidad */
+BEGIN TRANSACTION;
+BEGIN TRY
+    EXEC vac.usp_IngresarLote @Est, 'SPR', 'PRB-NUEVO-1', 'Lab', '2099-12-31', 100, 20, @IdSt OUTPUT;
+    EXEC vac.usp_AjustarStock @IdSt, 100, 'Conteo físico';
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_AjustarStock', 'Rechaza un ajuste sin diferencia', '50116', @Err);
+
 SELECT Caso, IIF(Esperado = Obtenido, 'OK', 'FALLA') AS Resultado, Objeto, Prueba, Esperado, Obtenido
 FROM @R ORDER BY Caso;
 SELECT SUM(IIF(Esperado = Obtenido, 1, 0)) AS Correctas, COUNT(*) AS Total FROM @R;

@@ -5,6 +5,7 @@ using Microsoft.Data.SqlClient;
 using VacunApp.Panel.Auth;
 using VacunApp.Panel.Data;
 using VacunApp.Panel.Pacientes;
+using VacunApp.Panel.Stock;
 
 // Interfaz mínima de consulta de VacunApp Tacna.
 // Toda la lógica vive en la base de datos (vistas, procedimientos y triggers);
@@ -78,6 +79,7 @@ app.MapPacientes();
 app.MapDosis();
 app.MapCarne();
 app.MapAuditoria();
+app.MapStock();
 
 // RN-22: las consultas regionales son solo del epidemiólogo y el administrador.
 var regional = app.MapGroup("/api").RequireAuthorization(Politicas.Regional);
@@ -125,9 +127,10 @@ app.MapGet("/api/catalogos", async (ClaimsPrincipal user) =>
         SELECT es.IdEstablecimiento, es.Nombre, d.Nombre AS Distrito FROM vac.EstablecimientoSalud es
           JOIN vac.Distrito d ON d.IdDistrito = es.IdDistrito ORDER BY d.Nombre, es.Nombre;
         SELECT IdVacunador, Dni, CONCAT(Nombres, ' ', Apellidos) AS Nombre, IdEstablecimiento FROM vac.Vacunador WHERE Activo = 1 AND (@Regional = 1 OR IdEstablecimiento = @Est);
-        SELECT v.Codigo, l.NumeroLote, l.FechaVencimiento FROM vac.LoteVacuna l
+        SELECT v.Codigo, l.NumeroLote, l.FechaVencimiento, s.Cantidad AS Existencias FROM vac.LoteVacuna l
           JOIN vac.Vacuna v ON v.IdVacuna = l.IdVacuna
-          WHERE l.FechaVencimiento >= CAST(GETDATE() AS DATE) AND YEAR(l.FechaVencimiento) <= YEAR(GETDATE()) + 1
+          LEFT JOIN vac.StockLote s ON s.IdLote = l.IdLote AND s.IdEstablecimiento = @Est
+          WHERE l.FechaVencimiento >= CAST(GETDATE() AS DATE) AND (@Regional = 1 OR s.Cantidad > 0)
           ORDER BY v.Codigo, l.NumeroLote;
         """,
         ("@Regional", Alcance.EsRegional(user)), ("@Est", Alcance.Establecimiento(user)));

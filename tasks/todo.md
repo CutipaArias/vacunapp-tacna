@@ -114,7 +114,7 @@ Plan: [plan.md](plan.md) · Spec: [../SPEC.md](../SPEC.md)
   - Files: `database/09_stock.sql` (triggers y SP van aquí: 09 corre después de 06 para no descontar stock de la carga histórica), `database/07_pruebas.sql`, `tests/VacunApp.Tests/StockTests.cs`
   - Deps: T3.1
 
-- [ ] **T3.3 Gestión de stock por el jefe (RF-09, CU09)** (M)
+- [x] **T3.3 Gestión de stock por el jefe (RF-09, CU09)** (M)
   - Acceptance: el jefe registra ingreso de lote y ajuste solo en su establecimiento; ve stock actual y alertas; otros establecimientos → 403.
   - Verify: xUnit (ok, otro establecimiento 403, cantidad negativa 400)
   - Files: `panel/Stock/StockEndpoints.cs`, `panel/wwwroot/stock.html`, `tests/…`

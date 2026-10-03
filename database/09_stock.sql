@@ -205,6 +205,106 @@ END
 GO
 
 /* ---------------------------------------------------------------------
+   usp_IngresarLote                                                RF-09
+   El jefe registra la llegada de un lote a su establecimiento. Si el lote
+   (vacuna + número) no existe se crea; si existe, debe traer el mismo
+   vencimiento. Suma a la existencia del establecimiento (la crea si
+   falta) y deja un movimiento ENTRADA. @UmbralMinimo NULL conserva el actual.
+   --------------------------------------------------------------------- */
+CREATE OR ALTER PROCEDURE vac.usp_IngresarLote
+    @IdEstablecimiento SMALLINT,
+    @CodigoVacuna      VARCHAR(10),
+    @NumeroLote        VARCHAR(20),
+    @Laboratorio       VARCHAR(50),
+    @FechaVencimiento  DATE,
+    @Cantidad          INT,
+    @UmbralMinimo      INT = NULL,
+    @IdStock           INT OUTPUT,
+    @Usuario           NVARCHAR(128) = NULL   -- usuario de la aplicación; NULL usa el contexto de sesión
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    DECLARE @IdVacuna TINYINT, @IdLote INT, @Vence DATE;
+
+    IF @Cantidad IS NULL OR @Cantidad <= 0 THROW 50108, 'La cantidad ingresada debe ser mayor que cero.', 1;
+    IF @UmbralMinimo < 0 THROW 50112, 'El umbral mínimo no puede ser negativo.', 1;
+    SELECT @IdVacuna = IdVacuna FROM vac.Vacuna WHERE Codigo = @CodigoVacuna;
+    IF @IdVacuna IS NULL THROW 50109, 'La vacuna indicada no existe.', 1;
+
+    BEGIN TRANSACTION;
+    SELECT @IdLote = IdLote, @Vence = FechaVencimiento
+    FROM vac.LoteVacuna WITH (UPDLOCK, HOLDLOCK)
+    WHERE IdVacuna = @IdVacuna AND NumeroLote = @NumeroLote;
+
+    IF @IdLote IS NULL
+    BEGIN
+        IF @FechaVencimiento < CAST(GETDATE() AS DATE) THROW 50111, 'No se puede ingresar un lote vencido.', 1;
+        INSERT vac.LoteVacuna (IdVacuna, NumeroLote, Laboratorio, FechaVencimiento)
+        VALUES (@IdVacuna, @NumeroLote, @Laboratorio, @FechaVencimiento);
+        SET @IdLote = SCOPE_IDENTITY();
+    END
+    ELSE
+    BEGIN
+        IF @Vence <> @FechaVencimiento THROW 50110, 'El lote ya existe con otra fecha de vencimiento.', 1;
+        IF @Vence < CAST(GETDATE() AS DATE) THROW 50111, 'No se puede ingresar un lote vencido.', 1;
+    END
+
+    SET @IdStock = NULL;   -- el parámetro OUTPUT puede llegar con un valor viejo del llamador
+    SELECT @IdStock = IdStock FROM vac.StockLote WITH (UPDLOCK, HOLDLOCK)
+    WHERE IdLote = @IdLote AND IdEstablecimiento = @IdEstablecimiento;
+
+    IF @IdStock IS NULL
+    BEGIN
+        INSERT vac.StockLote (IdLote, IdEstablecimiento, Cantidad, UmbralMinimo)
+        VALUES (@IdLote, @IdEstablecimiento, @Cantidad, ISNULL(@UmbralMinimo, 0));
+        SET @IdStock = SCOPE_IDENTITY();
+    END
+    ELSE
+        UPDATE vac.StockLote
+        SET Cantidad = Cantidad + @Cantidad, UmbralMinimo = ISNULL(@UmbralMinimo, UmbralMinimo)
+        WHERE IdStock = @IdStock;
+
+    INSERT vac.MovimientoStock (IdStock, Tipo, Cantidad, Motivo, Usuario)
+    VALUES (@IdStock, 'ENTRADA', @Cantidad, 'Ingreso de lote',
+            COALESCE(@Usuario, CAST(SESSION_CONTEXT(N'usuario') AS NVARCHAR(128)), SUSER_SNAME()));
+    COMMIT TRANSACTION;
+END
+GO
+
+/* ---------------------------------------------------------------------
+   usp_AjustarStock                                                RF-09
+   Fija la existencia en la cantidad contada físicamente y deja un
+   movimiento AJUSTE con la diferencia (con signo) y el motivo.
+   --------------------------------------------------------------------- */
+CREATE OR ALTER PROCEDURE vac.usp_AjustarStock
+    @IdStock       INT,
+    @CantidadNueva INT,
+    @Motivo        VARCHAR(200),
+    @Usuario       NVARCHAR(128) = NULL   -- usuario de la aplicación; NULL usa el contexto de sesión
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    DECLARE @Actual INT;
+
+    IF @CantidadNueva IS NULL OR @CantidadNueva < 0 THROW 50113, 'La cantidad no puede ser negativa.', 1;
+    IF NULLIF(LTRIM(RTRIM(@Motivo)), '') IS NULL THROW 50114, 'Indique el motivo del ajuste.', 1;
+
+    BEGIN TRANSACTION;
+    SELECT @Actual = Cantidad FROM vac.StockLote WITH (UPDLOCK, HOLDLOCK) WHERE IdStock = @IdStock;
+    IF @Actual IS NULL THROW 50115, 'La existencia indicada no existe.', 1;
+    IF @Actual = @CantidadNueva THROW 50116, 'La cantidad nueva es igual a la actual: no hay nada que ajustar.', 1;
+
+    UPDATE vac.StockLote SET Cantidad = @CantidadNueva WHERE IdStock = @IdStock;
+    INSERT vac.MovimientoStock (IdStock, Tipo, Cantidad, Motivo, Usuario)
+    VALUES (@IdStock, 'AJUSTE', @CantidadNueva - @Actual, LTRIM(RTRIM(@Motivo)),
+            COALESCE(@Usuario, CAST(SESSION_CONTEXT(N'usuario') AS NVARCHAR(128)), SUSER_SNAME()));
+    COMMIT TRANSACTION;
+END
+GO
+
+/* ---------------------------------------------------------------------
    Inventario inicial de demostración: solo si la tabla está vacía. Cada
    establecimiento recibe 1 000 unidades de cada lote vigente, con
    umbral mínimo de 50. Queda registrado como ENTRADA.
