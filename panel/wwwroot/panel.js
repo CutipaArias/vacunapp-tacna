@@ -49,7 +49,8 @@ async function cargarResumen() {
 }
 
 async function cargarCobertura() {
-  const q = new URLSearchParams({ vacuna: $('#f-vac').value, dosis: $('#f-dos').value, provincia: $('#f-prov').value });
+  const q = new URLSearchParams();
+  for (const [k, v] of [['vacuna', $('#f-vac').value], ['dosis', $('#f-dos').value], ['provincia', $('#f-prov').value]]) if (v) q.set(k, v);
   const r = await api('/api/cobertura?' + q);
   $('#t-cob').textContent = `· ${r.length} filas · ${r.__ms} ms`;
   table($('#cob'), [
@@ -82,7 +83,7 @@ async function cargarCampanas() {
 
 async function buscarPaciente() {
   const doc = $('#p-doc').value.trim();
-  if (!doc) return;
+  if (!doc) { $('#pac').innerHTML = '<div class="msg err">Escriba un DNI.</div>'; return; }
   $('#reg').hidden = true;
   try {
     const p = await api('/api/paciente/' + encodeURIComponent(doc));
@@ -234,7 +235,7 @@ function prepararCitas() {
   $('#c-buscar').hidden = yo.rol === 'CIUDADANO';
   const buscar = () => elegirPacienteCita($('#c-doc').value.trim());
   $('#b-c-buscar').onclick = buscar;
-  $('#c-doc').onkeydown = e => e.key === 'Enter' && buscar();
+  $('#c-doc').onkeydown = e => { if (e.key === 'Enter') buscar(); };
   $('#c-hijo').onchange = () => elegirPacienteCita($('#c-hijo').value);
   const recargar = () => cargarFranjasCita().catch(e => $('#c-msg').innerHTML = `<div class="msg err">${esc(e.message)}</div>`);
   $('#c-dosis').onchange = recargar; $('#c-est').onchange = recargar;
@@ -535,7 +536,7 @@ async function init() {
     .filter(e => yo.idEstablecimiento == null || e.IdEstablecimiento === yo.idEstablecimiento)
     .map(e => `<option value="${e.IdEstablecimiento}">${esc(e.Nombre)} (${esc(e.Distrito)})</option>`).join('');
   $('#b-cob').onclick = cargarCobertura; $('#b-ale').onclick = cargarAlertas; $('#b-pac').onclick = buscarPaciente;
-  $('#p-doc').onkeydown = e => e.key === 'Enter' && buscarPaciente();
+  $('#p-doc').onkeydown = e => { if (e.key === 'Enter') buscarPaciente(); };  // sin devolver false: cancelaría las teclas
   if (tabs.includes('citas')) prepararCitas();
   if (tabs.includes('citas-dia')) prepararCitasDia();
   if (tabs.includes('stock')) prepararStock();
