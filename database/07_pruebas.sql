@@ -214,6 +214,89 @@ BEGIN TRY
 END TRY BEGIN CATCH SET @Err = ERROR_MESSAGE(); END CATCH;
 INSERT @R VALUES ('usp_ListarPendientes', 'Pendientes en zona de brote', 'OK', @Err);
 
+/* =================== Módulo identidad (08_seguridad.sql) =================== */
+
+/* S1. Los cinco roles existen */
+BEGIN TRY
+    SELECT @n = COUNT(*) FROM vac.Rol WHERE Nombre IN ('ADMINISTRADOR','EPIDEMIOLOGO','JEFE_ESTABLECIMIENTO','VACUNADOR','CIUDADANO');
+    SET @Err = CAST(@n AS VARCHAR);
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+INSERT @R VALUES ('Rol', 'Existen los 5 roles del sistema', '5', @Err);
+
+/* S2. Usuarios semilla: uno por rol, ninguno con contraseña en claro */
+BEGIN TRY
+    SELECT @n = COUNT(*) FROM vac.Usuario
+    WHERE NombreUsuario IN ('admin','epi01','jefe01','vac01','ciud01') AND (ClaveHash IS NULL OR LEN(ClaveHash) >= 60);
+    SET @Err = CAST(@n AS VARCHAR);
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+INSERT @R VALUES ('Usuario', 'Usuarios semilla creados y sin clave en claro', '5', @Err);
+
+/* S3. Un texto corto (contraseña en claro) no se acepta como hash */
+BEGIN TRANSACTION;
+BEGIN TRY
+    INSERT vac.Usuario (NombreUsuario, NombreCompleto, ClaveHash, IdRol)
+    VALUES ('t_claro', 'Prueba', 'secreto123', (SELECT IdRol FROM vac.Rol WHERE Nombre = 'EPIDEMIOLOGO'));
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('Usuario', 'Rechaza contraseña almacenada en claro (CHECK)', '547', @Err);
+
+/* S4. Nombre de usuario duplicado (sin distinguir mayúsculas) */
+BEGIN TRANSACTION;
+BEGIN TRY
+    INSERT vac.Usuario (NombreUsuario, NombreCompleto, IdRol)
+    VALUES ('ADMIN', 'Duplicado', (SELECT IdRol FROM vac.Rol WHERE Nombre = 'ADMINISTRADOR'));
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('Usuario', 'Rechaza nombre de usuario duplicado', '2627', @Err);
+
+/* S5. Vacunador o jefe sin establecimiento (RN-22) */
+BEGIN TRANSACTION;
+BEGIN TRY
+    INSERT vac.Usuario (NombreUsuario, NombreCompleto, IdRol)
+    VALUES ('t_sinest', 'Sin establecimiento', (SELECT IdRol FROM vac.Rol WHERE Nombre = 'JEFE_ESTABLECIMIENTO'));
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('Usuario', 'Jefe/vacunador exige establecimiento', '547', @Err);
+
+/* S6. Rol inexistente */
+BEGIN TRANSACTION;
+BEGIN TRY
+    INSERT vac.Usuario (NombreUsuario, NombreCompleto, IdRol) VALUES ('t_norol', 'Sin rol', 99);
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('Usuario', 'Rechaza rol inexistente (FK)', '547', @Err);
+
+/* S7. Solo un ciudadano puede vincularse a pacientes (RN-17) */
+BEGIN TRANSACTION;
+BEGIN TRY
+    INSERT vac.VinculoFamiliar (IdUsuario, IdPaciente, Parentesco)
+    SELECT (SELECT IdUsuario FROM vac.Usuario WHERE NombreUsuario = 'epi01'), MIN(IdPaciente), 'TUTOR' FROM vac.Paciente;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('trg_Vinculo_SoloCiudadano', 'Rechaza vínculo de un usuario que no es ciudadano', '50201', @Err);
+
+/* S8. El ciudadano semilla ve a sus dos hijos vinculados */
+BEGIN TRY
+    SELECT @n = COUNT(*) FROM vac.VinculoFamiliar v JOIN vac.Usuario u ON u.IdUsuario = v.IdUsuario WHERE u.NombreUsuario = 'ciud01';
+    SET @Err = CAST(@n AS VARCHAR);
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+INSERT @R VALUES ('VinculoFamiliar', 'ciud01 tiene 2 pacientes vinculados', '2', @Err);
+
+/* S9. Vínculo duplicado */
+BEGIN TRANSACTION;
+BEGIN TRY
+    INSERT vac.VinculoFamiliar (IdUsuario, IdPaciente, Parentesco)
+    SELECT TOP (1) IdUsuario, IdPaciente, Parentesco FROM vac.VinculoFamiliar;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('VinculoFamiliar', 'Rechaza vínculo duplicado', '2627', @Err);
+
 SELECT Caso, IIF(Esperado = Obtenido, 'OK', 'FALLA') AS Resultado, Objeto, Prueba, Esperado, Obtenido
 FROM @R ORDER BY Caso;
 SELECT SUM(IIF(Esperado = Obtenido, 1, 0)) AS Correctas, COUNT(*) AS Total FROM @R;

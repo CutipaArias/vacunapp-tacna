@@ -24,7 +24,7 @@ Plan: [plan.md](plan.md) · Spec: [../SPEC.md](../SPEC.md)
 ---
 ## Fase 1 – `identidad` (con /security-and-hardening)
 
-- [ ] **T1.1 Tablas `Rol`, `Usuario`, `VinculoFamiliar` + usuarios semilla** (M)
+- [x] **T1.1 Tablas `Rol`, `Usuario`, `VinculoFamiliar` + usuarios semilla** (M)
   - Acceptance: 3 tablas con restricciones (usuario único, FK a rol y establecimiento); 5 roles; 5 usuarios semilla; `ClaveHash` nunca en claro; script idempotente.
   - Verify: `./desplegar.ps1 -Pruebas` dos veces seguidas sin error; casos nuevos en `07_pruebas.sql`
   - Files: `database/08_seguridad.sql`, `database/07_pruebas.sql`, `desplegar.ps1`

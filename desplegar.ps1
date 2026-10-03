@@ -32,7 +32,8 @@ for ($i = 0; $i -lt 30; $i++) {
 }
 if (-not $listo) { throw 'SQL Server no respondió a tiempo.' }
 
-$scripts = '01_esquema', '02_catalogos', '03_vistas', '04_procedimientos', '05_triggers', '06_datos_prueba'
+# 07_pruebas va al final: verifica también los objetos de 08_seguridad.
+$scripts = '01_esquema', '02_catalogos', '03_vistas', '04_procedimientos', '05_triggers', '06_datos_prueba', '08_seguridad'
 if ($Pruebas) { $scripts += '07_pruebas' }
 
 foreach ($s in $scripts) {
