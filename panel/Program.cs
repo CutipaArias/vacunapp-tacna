@@ -37,6 +37,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapAutenticacion();
+app.MapUsuarios();
 
 // RN-22: consultas regionales (epidemiólogo y administrador) y consultas clínicas (más jefe y vacunador).
 var regional = app.MapGroup("/api").RequireAuthorization(Politicas.Regional);
@@ -90,7 +91,7 @@ app.MapGet("/api/catalogos", async (ClaimsPrincipal user) =>
           JOIN vac.Vacuna v ON v.IdVacuna = e.IdVacuna ORDER BY v.Codigo, e.NumeroDosis;
         SELECT es.IdEstablecimiento, es.Nombre, d.Nombre AS Distrito FROM vac.EstablecimientoSalud es
           JOIN vac.Distrito d ON d.IdDistrito = es.IdDistrito ORDER BY d.Nombre, es.Nombre;
-        SELECT Dni, CONCAT(Nombres, ' ', Apellidos) AS Nombre, IdEstablecimiento FROM vac.Vacunador WHERE Activo = 1 AND (@Regional = 1 OR IdEstablecimiento = @Est);
+        SELECT IdVacunador, Dni, CONCAT(Nombres, ' ', Apellidos) AS Nombre, IdEstablecimiento FROM vac.Vacunador WHERE Activo = 1 AND (@Regional = 1 OR IdEstablecimiento = @Est);
         SELECT v.Codigo, l.NumeroLote, l.FechaVencimiento FROM vac.LoteVacuna l
           JOIN vac.Vacuna v ON v.IdVacuna = l.IdVacuna
           WHERE l.FechaVencimiento >= CAST(GETDATE() AS DATE) AND YEAR(l.FechaVencimiento) <= YEAR(GETDATE()) + 1

@@ -48,7 +48,7 @@ Plan: [plan.md](plan.md) · Spec: [../SPEC.md](../SPEC.md)
   - Files: `panel/wwwroot/login.html`, `panel/wwwroot/app.js`, `panel/wwwroot/index.html`, `panel/wwwroot/estilos.css`
   - Deps: T1.3
 
-- [ ] **T1.5 Gestión de usuarios y roles (admin)** (M) — RF-02, CU02
+- [x] **T1.5 Gestión de usuarios y roles (admin)** (M) — RF-02, CU02
   - Acceptance: el administrador crea/desactiva usuarios y asigna rol y establecimiento; clave inicial hasheada por la API; validación de política de clave (mín. 8 caracteres); un no-admin recibe 403.
   - Verify: tests xUnit (crear, duplicado → 400, no-admin → 403)
   - Files: `panel/Auth/UsuariosEndpoints.cs`, `database/08_seguridad.sql` (SP `usp_CrearUsuario`), `panel/wwwroot/usuarios.html`, `tests/…/UsuariosTests.cs`

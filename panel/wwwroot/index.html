@@ -23,6 +23,7 @@
   <button data-tab="alertas" data-roles="ADMINISTRADOR EPIDEMIOLOGO" hidden>Alertas</button>
   <button data-tab="campanas" data-roles="ADMINISTRADOR EPIDEMIOLOGO" hidden>Campañas</button>
   <button data-tab="paciente" data-roles="ADMINISTRADOR EPIDEMIOLOGO JEFE_ESTABLECIMIENTO VACUNADOR" hidden>Paciente</button>
+  <button data-tab="usuarios" data-roles="ADMINISTRADOR" hidden>Usuarios</button>
 </nav>
 <main>
   <div id="aviso"></div>
@@ -91,6 +92,27 @@
         <button class="b" id="b-reg">Registrar</button>
       </div>
       <div id="r-msg"></div>
+    </div>
+  </section>
+
+  <section id="usuarios">
+    <div class="card">
+      <h2>Nuevo usuario</h2>
+      <p>La contraseña se guarda cifrada (hash); entre 10 y 128 caracteres con mayúscula, minúscula, número y símbolo.</p>
+      <form class="filters" id="f-usu" autocomplete="off">
+        <label>Usuario <input id="u-nom" maxlength="30" required></label>
+        <label>Nombre completo <input id="u-ape" maxlength="100" required></label>
+        <label>Contraseña inicial <input id="u-cla" type="password" maxlength="128" autocomplete="new-password" required></label>
+        <label>Rol <select id="u-rol"></select></label>
+        <label id="u-lest">Establecimiento <select id="u-est"></select></label>
+        <label id="u-lvac">Vacunador <select id="u-vac"></select></label>
+        <button class="b" type="submit">Crear</button>
+      </form>
+      <div id="u-msg" role="alert"></div>
+    </div>
+    <div class="card">
+      <h2>Usuarios del sistema</h2>
+      <div class="tbl"><table id="u-tbl"></table></div>
     </div>
   </section>
 </main>

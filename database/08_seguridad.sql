@@ -124,3 +124,110 @@ CROSS APPLY (SELECT TOP (2) IdPaciente FROM vac.Paciente ORDER BY IdPaciente) p
 WHERE u.NombreUsuario = 'ciud01'
   AND NOT EXISTS (SELECT 1 FROM vac.VinculoFamiliar v WHERE v.IdUsuario = u.IdUsuario AND v.IdPaciente = p.IdPaciente);
 GO
+
+/* ---------------------------------------------------------------------
+   Gestión de usuarios (RF-02). La API genera el hash con PasswordHasher y
+   lo pasa a estos procedimientos; la base valida la coherencia rol /
+   establecimiento / vacunador y devuelve mensajes en español.
+   --------------------------------------------------------------------- */
+CREATE OR ALTER PROCEDURE vac.usp_ValidarAsignacionUsuario
+    @Rol               VARCHAR(30),
+    @IdEstablecimiento SMALLINT,
+    @IdVacunador       INT,
+    @IdRol             TINYINT OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT @IdRol = IdRol FROM vac.Rol WHERE Nombre = @Rol;
+    IF @IdRol IS NULL
+        THROW 50212, 'El rol indicado no existe.', 1;
+    IF @IdRol IN (3, 4) AND @IdEstablecimiento IS NULL
+        THROW 50213, 'El jefe de establecimiento y el vacunador deben tener un establecimiento.', 1;
+    IF @IdRol NOT IN (3, 4) AND @IdEstablecimiento IS NOT NULL
+        THROW 50220, 'Los roles regionales y el ciudadano no llevan establecimiento.', 1;
+    IF @IdEstablecimiento IS NOT NULL
+       AND NOT EXISTS (SELECT 1 FROM vac.EstablecimientoSalud WHERE IdEstablecimiento = @IdEstablecimiento)
+        THROW 50214, 'El establecimiento indicado no existe.', 1;
+    IF @IdRol = 4
+       AND NOT EXISTS (SELECT 1 FROM vac.Vacunador
+                       WHERE IdVacunador = @IdVacunador AND IdEstablecimiento = @IdEstablecimiento AND Activo = 1)
+        THROW 50215, 'El vacunador debe estar activo y pertenecer al establecimiento indicado.', 1;
+    IF @IdRol <> 4 AND @IdVacunador IS NOT NULL
+        THROW 50219, 'Solo el rol VACUNADOR se asocia a personal vacunador.', 1;
+END
+GO
+
+CREATE OR ALTER PROCEDURE vac.usp_CrearUsuario
+    @NombreUsuario     VARCHAR(30),
+    @NombreCompleto    VARCHAR(100),
+    @ClaveHash         VARCHAR(255),
+    @Rol               VARCHAR(30),
+    @IdEstablecimiento SMALLINT = NULL,
+    @IdVacunador       INT      = NULL,
+    @IdUsuario         INT OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    IF @NombreUsuario IS NULL OR LEN(@NombreUsuario) < 3 OR @NombreUsuario LIKE '%[^A-Za-z0-9._]%'
+        THROW 50210, 'El nombre de usuario debe tener entre 3 y 30 caracteres: letras, números, punto o guion bajo.', 1;
+    IF NULLIF(LTRIM(RTRIM(@NombreCompleto)), '') IS NULL
+        THROW 50221, 'Ingrese el nombre completo del usuario.', 1;
+    IF @ClaveHash IS NULL OR LEN(@ClaveHash) < 60
+        THROW 50216, 'La contraseña debe recibirse como hash; no se guarda texto plano.', 1;
+
+    DECLARE @IdRol TINYINT;
+    EXEC vac.usp_ValidarAsignacionUsuario @Rol, @IdEstablecimiento, @IdVacunador, @IdRol OUTPUT;
+
+    IF EXISTS (SELECT 1 FROM vac.Usuario WHERE NombreUsuario = @NombreUsuario)
+        THROW 50211, 'Ya existe un usuario con ese nombre.', 1;
+
+    INSERT vac.Usuario (NombreUsuario, NombreCompleto, ClaveHash, IdRol, IdEstablecimiento, IdVacunador)
+    VALUES (@NombreUsuario, LTRIM(RTRIM(@NombreCompleto)), @ClaveHash, @IdRol, @IdEstablecimiento, @IdVacunador);
+    SET @IdUsuario = SCOPE_IDENTITY();
+END
+GO
+
+CREATE OR ALTER PROCEDURE vac.usp_ActualizarUsuario
+    @IdUsuario         INT,
+    @NombreCompleto    VARCHAR(100),
+    @Rol               VARCHAR(30),
+    @IdEstablecimiento SMALLINT = NULL,
+    @IdVacunador       INT      = NULL,
+    @Activo            BIT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    IF NULLIF(LTRIM(RTRIM(@NombreCompleto)), '') IS NULL
+        THROW 50221, 'Ingrese el nombre completo del usuario.', 1;
+
+    DECLARE @IdRol TINYINT;
+    EXEC vac.usp_ValidarAsignacionUsuario @Rol, @IdEstablecimiento, @IdVacunador, @IdRol OUTPUT;
+
+    BEGIN TRANSACTION;
+    /* Se bloquean los administradores activos para que dos bajas simultáneas no dejen el sistema sin ninguno */
+    DECLARE @EraAdminActivo BIT = 0, @OtrosAdmins INT;
+    SELECT @EraAdminActivo = 1 FROM vac.Usuario WITH (UPDLOCK, HOLDLOCK) WHERE IdUsuario = @IdUsuario AND IdRol = 1 AND Activo = 1;
+    IF NOT EXISTS (SELECT 1 FROM vac.Usuario WHERE IdUsuario = @IdUsuario)
+    BEGIN
+        ROLLBACK TRANSACTION;
+        THROW 50222, 'El usuario no existe.', 1;
+    END
+    SELECT @OtrosAdmins = COUNT(*) FROM vac.Usuario WITH (UPDLOCK, HOLDLOCK)
+    WHERE IdRol = 1 AND Activo = 1 AND IdUsuario <> @IdUsuario;
+    IF @EraAdminActivo = 1 AND @OtrosAdmins = 0 AND (@IdRol <> 1 OR @Activo = 0)
+    BEGIN
+        ROLLBACK TRANSACTION;
+        THROW 50218, 'No se puede dejar el sistema sin un administrador activo.', 1;
+    END
+
+    UPDATE vac.Usuario
+    SET NombreCompleto = LTRIM(RTRIM(@NombreCompleto)), IdRol = @IdRol,
+        IdEstablecimiento = @IdEstablecimiento, IdVacunador = @IdVacunador, Activo = @Activo
+    WHERE IdUsuario = @IdUsuario;
+    COMMIT TRANSACTION;
+END
+GO

@@ -25,7 +25,7 @@ const tag = v => `<span class="tag ${esc(v)}">${esc(v)}</span>`;
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
   document.querySelectorAll('nav button, section').forEach(x => x.classList.remove('on'));
   b.classList.add('on'); $('#' + b.dataset.tab).classList.add('on');
-  ({ cobertura: cargarCobertura, alertas: cargarAlertas, campanas: cargarCampanas })[b.dataset.tab]?.();
+  ({ cobertura: cargarCobertura, alertas: cargarAlertas, campanas: cargarCampanas, usuarios: cargarUsuarios })[b.dataset.tab]?.();
 });
 
 async function cargarResumen() {
@@ -121,6 +121,59 @@ function prepararRegistro(doc, pendientes) {
   };
 }
 
+// ---- Administración de usuarios (solo ADMINISTRADOR; el servidor lo vuelve a exigir) ----
+let usuarios = [];
+
+async function cargarUsuarios() {
+  usuarios = await api('/api/usuarios');
+  table($('#u-tbl'), [
+    { h: 'Usuario', k: 'nombreUsuario' }, { h: 'Nombre', k: 'nombreCompleto' },
+    { h: 'Rol', f: r => esc(ROLES[r.rol] ?? r.rol) }, { h: 'Establecimiento', f: r => esc(r.establecimiento ?? '—') },
+    { h: 'Estado', f: r => `<span class="tag ${r.activo ? 'ÓPTIMA' : 'CRÍTICA'}">${r.activo ? 'Activo' : 'Inactivo'}</span>` },
+    { h: '', f: r => r.nombreUsuario === yo.usuario ? '' :
+        `<button class="b sec" data-id="${r.idUsuario}" data-activo="${r.activo ? 0 : 1}">${r.activo ? 'Desactivar' : 'Activar'}</button>` }
+  ], usuarios.map(u => ({ ...u })));
+}
+
+function prepararUsuarios() {
+  $('#u-rol').innerHTML = Object.entries(ROLES).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join('');
+  $('#u-est').innerHTML = cat.establecimientos.map(e => `<option value="${e.IdEstablecimiento}">${esc(e.Nombre)}</option>`).join('');
+  const ajustar = () => {
+    const rol = $('#u-rol').value;
+    $('#u-lest').hidden = !['JEFE_ESTABLECIMIENTO', 'VACUNADOR'].includes(rol);
+    $('#u-lvac').hidden = rol !== 'VACUNADOR';
+    $('#u-vac').innerHTML = cat.personal.filter(p => p.IdEstablecimiento == $('#u-est').value)
+      .map(p => `<option value="${p.IdVacunador}">${esc(p.Nombre)}</option>`).join('');
+  };
+  $('#u-rol').onchange = ajustar; $('#u-est').onchange = ajustar; ajustar();
+
+  $('#f-usu').onsubmit = async e => {
+    e.preventDefault();
+    const rol = $('#u-rol').value;
+    const conEst = !$('#u-lest').hidden, conVac = !$('#u-lvac').hidden;
+    try {
+      await api('/api/usuarios', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+        usuario: $('#u-nom').value.trim(), nombre: $('#u-ape').value.trim(), clave: $('#u-cla').value, rol,
+        idEstablecimiento: conEst ? +$('#u-est').value : null, idVacunador: conVac ? +$('#u-vac').value : null }) });
+      $('#u-msg').innerHTML = '<div class="msg ok">Usuario creado.</div>';
+      $('#f-usu').reset(); ajustar();
+      await cargarUsuarios();
+    } catch (err) { $('#u-msg').innerHTML = `<div class="msg err">${esc(err.message)}</div>`; }
+  };
+
+  $('#u-tbl').onclick = async e => {
+    const b = e.target.closest('button[data-id]');
+    if (!b) return;
+    const u = usuarios.find(x => x.idUsuario === +b.dataset.id);
+    try {
+      await api('/api/usuarios/' + u.idUsuario, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+        nombre: u.nombreCompleto, rol: u.rol, idEstablecimiento: u.idEstablecimiento, idVacunador: u.idVacunador, activo: b.dataset.activo === '1' }) });
+      $('#u-msg').innerHTML = '';
+      await cargarUsuarios();
+    } catch (err) { $('#u-msg').innerHTML = `<div class="msg err">${esc(err.message)}</div>`; }
+  };
+}
+
 const ROLES = {
   ADMINISTRADOR: 'Administrador', EPIDEMIOLOGO: 'Epidemiólogo', JEFE_ESTABLECIMIENTO: 'Jefe de establecimiento',
   VACUNADOR: 'Vacunador', CIUDADANO: 'Ciudadano'
@@ -158,6 +211,7 @@ async function init() {
     .map(e => `<option value="${e.IdEstablecimiento}">${esc(e.Nombre)} (${esc(e.Distrito)})</option>`).join('');
   $('#b-cob').onclick = cargarCobertura; $('#b-ale').onclick = cargarAlertas; $('#b-pac').onclick = buscarPaciente;
   $('#p-doc').onkeydown = e => e.key === 'Enter' && buscarPaciente();
+  if (tabs.includes('usuarios')) prepararUsuarios();
 
   document.querySelector(`nav button[data-tab="${tabs[0]}"]`).click();
   if (tabs[0] === 'resumen') await cargarResumen();

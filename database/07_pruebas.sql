@@ -297,6 +297,84 @@ END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
 IF @@TRANCOUNT > 0 ROLLBACK;
 INSERT @R VALUES ('VinculoFamiliar', 'Rechaza vínculo duplicado', '2627', @Err);
 
+/* --- Gestión de usuarios (usp_CrearUsuario / usp_ActualizarUsuario) --- */
+DECLARE @HashPrueba VARCHAR(255) = REPLICATE('x', 64), @IdUsu INT, @EstOtro SMALLINT;
+SELECT @EstOtro = MIN(IdEstablecimiento) FROM vac.EstablecimientoSalud WHERE IdEstablecimiento <> @Est;
+
+/* S10. Alta válida de un vacunador */
+BEGIN TRANSACTION;
+BEGIN TRY
+    EXEC vac.usp_CrearUsuario 't_vac', 'Vacunador de prueba', @HashPrueba, 'VACUNADOR', @Est, @IdVacunador, @IdUsu OUTPUT;
+    SET @Err = IIF(EXISTS (SELECT 1 FROM vac.Usuario WHERE IdUsuario = @IdUsu AND IdEstablecimiento = @Est), 'OK', 'no se creó');
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_CrearUsuario', 'Crea un vacunador con su establecimiento', 'OK', @Err);
+
+/* S11. Nombre de usuario repetido (sin distinguir mayúsculas) */
+BEGIN TRANSACTION;
+BEGIN TRY
+    EXEC vac.usp_CrearUsuario 'ADMIN', 'Repetido', @HashPrueba, 'EPIDEMIOLOGO', NULL, NULL, @IdUsu OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_CrearUsuario', 'Rechaza nombre de usuario repetido', '50211', @Err);
+
+/* S12. Rol inexistente */
+BEGIN TRANSACTION;
+BEGIN TRY
+    EXEC vac.usp_CrearUsuario 't_rol', 'Rol malo', @HashPrueba, 'SUPERUSUARIO', NULL, NULL, @IdUsu OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_CrearUsuario', 'Rechaza rol inexistente', '50212', @Err);
+
+/* S13. Jefe sin establecimiento */
+BEGIN TRANSACTION;
+BEGIN TRY
+    EXEC vac.usp_CrearUsuario 't_jefe', 'Jefe sin centro', @HashPrueba, 'JEFE_ESTABLECIMIENTO', NULL, NULL, @IdUsu OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_CrearUsuario', 'Jefe sin establecimiento', '50213', @Err);
+
+/* S14. Vacunador asignado a un establecimiento que no es el suyo */
+BEGIN TRANSACTION;
+BEGIN TRY
+    EXEC vac.usp_CrearUsuario 't_vac2', 'Vacunador ajeno', @HashPrueba, 'VACUNADOR', @EstOtro, @IdVacunador, @IdUsu OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_CrearUsuario', 'Vacunador de otro establecimiento', '50215', @Err);
+
+/* S15. Un valor corto (contraseña en claro) no se acepta como hash */
+BEGIN TRANSACTION;
+BEGIN TRY
+    EXEC vac.usp_CrearUsuario 't_claro2', 'Clave en claro', 'secreto123', 'EPIDEMIOLOGO', NULL, NULL, @IdUsu OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_CrearUsuario', 'Rechaza una clave que no es un hash', '50216', @Err);
+
+/* S16. No se puede desactivar al único administrador activo */
+BEGIN TRANSACTION;
+BEGIN TRY
+    SELECT @IdUsu = IdUsuario FROM vac.Usuario WHERE NombreUsuario = 'admin';
+    EXEC vac.usp_ActualizarUsuario @IdUsu, 'Administrador del sistema', 'ADMINISTRADOR', NULL, NULL, 0;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_ActualizarUsuario', 'No deja el sistema sin administrador activo', '50218', @Err);
+
+/* S17. Cambio de establecimiento de un jefe */
+BEGIN TRANSACTION;
+BEGIN TRY
+    SELECT @IdUsu = IdUsuario FROM vac.Usuario WHERE NombreUsuario = 'jefe01';
+    EXEC vac.usp_ActualizarUsuario @IdUsu, 'Jefe (prueba)', 'JEFE_ESTABLECIMIENTO', @EstOtro, NULL, 1;
+    SET @Err = IIF((SELECT IdEstablecimiento FROM vac.Usuario WHERE IdUsuario = @IdUsu) = @EstOtro, 'OK', 'no cambió');
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_ActualizarUsuario', 'Reasigna un jefe a otro establecimiento', 'OK', @Err);
+
 SELECT Caso, IIF(Esperado = Obtenido, 'OK', 'FALLA') AS Resultado, Objeto, Prueba, Esperado, Obtenido
 FROM @R ORDER BY Caso;
 SELECT SUM(IIF(Esperado = Obtenido, 1, 0)) AS Correctas, COUNT(*) AS Total FROM @R;

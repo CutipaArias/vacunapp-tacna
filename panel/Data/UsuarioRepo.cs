@@ -1,9 +1,17 @@
+using System.Data;
+using Microsoft.Data.SqlClient;
+
 namespace VacunApp.Panel.Data;
 
 /// <summary>Cuenta de acceso tal como la guarda vac.Usuario (ClaveHash es null si aún no tiene clave).</summary>
 sealed record CuentaUsuario(
     int IdUsuario, string NombreUsuario, string NombreCompleto, string? ClaveHash,
     string Rol, short? IdEstablecimiento, int? IdVacunador, bool Activo);
+
+/// <summary>Fila del listado de administración: no tiene campo de contraseña ni de hash.</summary>
+sealed record UsuarioFila(
+    int IdUsuario, string NombreUsuario, string NombreCompleto, string Rol, short? IdEstablecimiento,
+    string? Establecimiento, int? IdVacunador, bool Activo, DateTime FechaCreacion);
 
 /// <summary>Acceso a datos de usuarios. Todas las consultas usan parámetros tipados.</summary>
 sealed class UsuarioRepo(Db db)
@@ -33,6 +41,40 @@ sealed class UsuarioRepo(Db db)
     public Task ActualizarHashAsync(int idUsuario, string hash) =>
         db.QueryAsync("UPDATE vac.Usuario SET ClaveHash = @Hash WHERE IdUsuario = @Id",
             ("@Hash", hash), ("@Id", idUsuario));
+
+    /// <summary>Listado para administración. Nunca incluye ClaveHash.</summary>
+    public async Task<List<UsuarioFila>> ListarAsync() =>
+        (await db.QueryAsync(
+            """
+            SELECT u.IdUsuario, u.NombreUsuario, u.NombreCompleto, r.Nombre AS Rol, u.IdEstablecimiento,
+                   e.Nombre AS Establecimiento, u.IdVacunador, u.Activo, u.FechaCreacion
+            FROM vac.Usuario u
+            JOIN vac.Rol r ON r.IdRol = u.IdRol
+            LEFT JOIN vac.EstablecimientoSalud e ON e.IdEstablecimiento = u.IdEstablecimiento
+            ORDER BY u.NombreUsuario
+            """))[0]
+        .Select(f => new UsuarioFila(
+            (int)f["IdUsuario"]!, (string)f["NombreUsuario"]!, (string)f["NombreCompleto"]!, (string)f["Rol"]!,
+            (short?)f["IdEstablecimiento"], (string?)f["Establecimiento"], (int?)f["IdVacunador"],
+            (bool)f["Activo"]!, (DateTime)f["FechaCreacion"]!))
+        .ToList();
+
+    /// <summary>Crea el usuario con vac.usp_CrearUsuario; las reglas de asignación las valida la base.</summary>
+    public async Task<int> CrearAsync(
+        string nombreUsuario, string nombreCompleto, string claveHash, string rol, short? idEstablecimiento, int? idVacunador)
+    {
+        var id = new SqlParameter("@IdUsuario", SqlDbType.Int) { Direction = ParameterDirection.Output };
+        await db.ExecAsync("vac.usp_CrearUsuario",
+            ("@NombreUsuario", nombreUsuario), ("@NombreCompleto", nombreCompleto), ("@ClaveHash", claveHash),
+            ("@Rol", rol), ("@IdEstablecimiento", idEstablecimiento), ("@IdVacunador", idVacunador), ("@IdUsuario", id));
+        return (int)id.Value;
+    }
+
+    public Task ActualizarAsync(
+        int idUsuario, string nombreCompleto, string rol, short? idEstablecimiento, int? idVacunador, bool activo) =>
+        db.ExecAsync("vac.usp_ActualizarUsuario",
+            ("@IdUsuario", idUsuario), ("@NombreCompleto", nombreCompleto), ("@Rol", rol),
+            ("@IdEstablecimiento", idEstablecimiento), ("@IdVacunador", idVacunador), ("@Activo", activo));
 
     /// <summary>Asigna el hash solo si la cuenta sigue sin clave (nunca pisa una clave existente).</summary>
     public Task AsignarHashSiVacioAsync(int idUsuario, string hash) =>
