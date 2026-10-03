@@ -24,6 +24,7 @@
   <button data-tab="campanas" data-roles="ADMINISTRADOR EPIDEMIOLOGO" hidden>Campañas</button>
   <button data-tab="paciente" data-roles="ADMINISTRADOR EPIDEMIOLOGO JEFE_ESTABLECIMIENTO VACUNADOR CIUDADANO" hidden>Paciente</button>
   <button data-tab="citas" data-roles="CIUDADANO VACUNADOR JEFE_ESTABLECIMIENTO" hidden>Citas</button>
+  <button data-tab="citas-dia" data-roles="VACUNADOR" hidden>Citas del día</button>
   <button data-tab="stock" data-roles="JEFE_ESTABLECIMIENTO" hidden>Stock</button>
   <button data-tab="horarios" data-roles="JEFE_ESTABLECIMIENTO" hidden>Horarios</button>
   <button data-tab="usuarios" data-roles="ADMINISTRADOR" hidden>Usuarios</button>
@@ -205,6 +206,19 @@
         <button class="b" type="submit">Ingresar</button>
       </form>
       <div id="i-msg" role="alert"></div>
+    </div>
+  </section>
+
+  <section id="citas-dia">
+    <div class="card">
+      <h2>Citas del día <span class="time" id="t-dia"></span></h2>
+      <p>Atender registra la dosis con el lote elegido (mismas validaciones que el registro de dosis) y descuenta stock. «No asistió» solo se habilita cuando la hora ya pasó y no consume stock.</p>
+      <form class="filters" id="f-dia" autocomplete="off">
+        <label>Fecha <input id="d-fecha" type="date" required></label>
+        <button class="b" type="submit">Ver</button>
+      </form>
+      <div class="tbl"><table id="dia-tbl"></table></div>
+      <div id="dia-msg" role="alert"></div>
     </div>
   </section>
 

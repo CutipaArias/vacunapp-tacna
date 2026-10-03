@@ -150,10 +150,10 @@ Plan: [plan.md](plan.md) · Spec: [../SPEC.md](../SPEC.md)
   - Files: `database/10_agenda.sql`, `panel/Agenda/CitasEndpoints.cs`, `tests/…`
   - Deps: T4.2
 
-- [ ] **T4.5 Atender cita e inasistencia (RF-07, CU07, RN-18)** (M)
+- [x] **T4.5 Atender cita e inasistencia (RF-07, CU07, RN-18)** (M)
   - Acceptance: atender = registrar dosis + cita ATENDIDA + cierre de alertas, en una sola transacción (si falla la dosis, la cita no cambia); inasistencia → NO_ASISTIO + alerta de seguimiento.
   - Verify: pruebas BD (rollback si el stock es 0); xUnit
-  - Files: `database/10_agenda.sql`, `panel/Agenda/AtencionEndpoints.cs`, `panel/wwwroot/citas-dia.html`, `tests/…`
+  - Files: `database/10_agenda.sql`, `panel/Agenda/AtencionEndpoints.cs`, `panel/wwwroot/index.html` + `panel.js` (pestaña «Citas del día»), `tests/…`
   - Deps: T4.2, T2.2, T3.2
 
 ### Checkpoint D (agenda)

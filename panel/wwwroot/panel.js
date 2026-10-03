@@ -25,7 +25,7 @@ const tag = v => `<span class="tag ${esc(v)}">${esc(v)}</span>`;
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
   document.querySelectorAll('nav button, section').forEach(x => x.classList.remove('on'));
   b.classList.add('on'); $('#' + b.dataset.tab).classList.add('on');
-  ({ cobertura: cargarCobertura, alertas: cargarAlertas, campanas: cargarCampanas, citas: cargarCitas, stock: cargarStock, horarios: cargarHorarios, usuarios: cargarUsuarios, auditoria: cargarAuditoria })[b.dataset.tab]?.();
+  ({ cobertura: cargarCobertura, alertas: cargarAlertas, campanas: cargarCampanas, citas: cargarCitas, 'citas-dia': cargarCitasDia, stock: cargarStock, horarios: cargarHorarios, usuarios: cargarUsuarios, auditoria: cargarAuditoria })[b.dataset.tab]?.();
 });
 
 async function cargarResumen() {
@@ -290,6 +290,56 @@ function prepararCitas() {
   };
 }
 
+// ---- Citas del día: atender e inasistencia (solo VACUNADOR) ----
+let lotesDia = [];
+const ESTADO_CITA = { PROGRAMADA: 'ÓPTIMA', ATENDIDA: 'BAJO', NO_ASISTIO: 'ALTO' };
+
+async function cargarCitasDia() {
+  const r = await api('/api/citas/dia?' + new URLSearchParams({ fecha: $('#d-fecha').value || hoyISO() }));
+  lotesDia = r.lotes;
+  $('#t-dia').textContent = `· ${r.citas.length} citas · ${r.__ms} ms`;
+  const esHoy = ($('#d-fecha').value || hoyISO()) === hoyISO();
+  table($('#dia-tbl'), [
+    { h: 'Hora', k: 'hora' }, { h: 'Paciente', f: c => `${esc(c.paciente)} <small class="muted">${esc(c.documento)}</small>` },
+    { h: 'Dosis', f: c => `${esc(c.vacuna)} · ${esc(c.numeroDosis)}` },
+    { h: 'Estado', f: c => `<span class="tag ${ESTADO_CITA[c.estado] ?? 'ACEPTABLE'}">${esc(c.estado)}</span>` },
+    { h: 'Lote', f: c => {
+        if (c.estado !== 'PROGRAMADA') return '';
+        const ls = lotesDia.filter(l => l.vacuna === c.vacuna);
+        return ls.length ? `<select data-lote="${c.idCita}" aria-label="Lote">${ls.map(l => `<option value="${esc(l.numeroLote)}">${esc(l.numeroLote)} (${esc(l.cantidad)})</option>`).join('')}</select>`
+                         : '<span class="muted">Sin lotes con existencias</span>';
+      } },
+    { h: '', f: c => c.estado !== 'PROGRAMADA' ? '' :
+        (esHoy ? `<button class="b" data-acc="atender" data-id="${c.idCita}">Atender</button> ` : '') +
+        `<button class="b sec" data-acc="inasistencia" data-id="${c.idCita}">No asistió</button>` }
+  ], r.citas);
+}
+
+function prepararCitasDia() {
+  $('#d-fecha').value = hoyISO();
+  const aviso = (ok, t) => $('#dia-msg').innerHTML = `<div class="msg ${ok ? 'ok' : 'err'}">${esc(t)}</div>`;
+  $('#f-dia').onsubmit = async e => { e.preventDefault(); try { await cargarCitasDia(); $('#dia-msg').innerHTML = ''; } catch (err) { aviso(false, err.message); } };
+  $('#dia-tbl').onclick = async e => {
+    const b = e.target.closest('button[data-acc]');
+    if (!b) return;
+    const id = +b.dataset.id;
+    b.disabled = true;
+    try {
+      if (b.dataset.acc === 'atender') {
+        const lote = document.querySelector(`select[data-lote="${id}"]`)?.value;
+        if (!lote) { aviso(false, 'Elija un lote con existencias.'); return; }
+        await api(`/api/citas/${id}/atender`, json({ numeroLote: lote }));
+        await cargarCitasDia(); aviso(true, 'Dosis registrada y cita atendida.');
+      } else {
+        if (!confirm('¿Marcar que el paciente no asistió? Se creará una alerta de seguimiento.')) return;
+        const r = await api(`/api/citas/${id}/inasistencia`, { method: 'POST' });
+        await cargarCitasDia(); aviso(true, r.alertaCreada ? 'Inasistencia registrada. Quedó una alerta de seguimiento.' : 'Inasistencia registrada (el paciente ya tenía una alerta pendiente).');
+      }
+    } catch (err) { aviso(false, err.message); }   // p. ej. sin stock: la cita sigue programada
+    finally { b.disabled = false; }
+  };
+}
+
 // ---- Horarios del establecimiento (solo JEFE_ESTABLECIMIENTO) ----
 let horarios = [];
 const hoyISO = (dias = 0) => { const d = new Date(); d.setDate(d.getDate() + dias); return d.toLocaleDateString('sv-SE'); };
@@ -487,6 +537,7 @@ async function init() {
   $('#b-cob').onclick = cargarCobertura; $('#b-ale').onclick = cargarAlertas; $('#b-pac').onclick = buscarPaciente;
   $('#p-doc').onkeydown = e => e.key === 'Enter' && buscarPaciente();
   if (tabs.includes('citas')) prepararCitas();
+  if (tabs.includes('citas-dia')) prepararCitasDia();
   if (tabs.includes('stock')) prepararStock();
   if (tabs.includes('horarios')) prepararHorarios();
   if (tabs.includes('usuarios')) prepararUsuarios();

@@ -1100,6 +1100,141 @@ END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
 IF @@TRANCOUNT > 0 ROLLBACK;
 INSERT @R VALUES ('usp_ReprogramarCita', 'Rechaza una franja inactiva', '50121', @Err);
 
+/* =================== Agenda: atender e inasistencia (RF-07; RN-18) =================== */
+DECLARE @HoyTarde DATETIME2(0) = DATEADD(MINUTE, 1439, CAST(@Hoy AS DATETIME2(0))), @Ayer DATETIME2(0) = DATEADD(HOUR, 10, CAST(DATEADD(DAY, -1, @Hoy) AS DATETIME2(0)));
+DECLARE @StockAntes INT, @IdAtendida BIGINT, @Alerta BIT;
+
+/* H33. Atender: registra la dosis, descuenta stock, marca la cita ATENDIDA y cierra la alerta pendiente */
+BEGIN TRANSACTION;
+EXEC vac.usp_RegistrarPaciente 'DNI', '89050001', 'Prueba', 'Uno', NULL, @Nac20m, 'M', '230104', NULL, NULL, @IdPac OUTPUT;
+UPDATE vac.Alerta SET Estado = 'DESCARTADA', FechaAtencion = SYSDATETIME() WHERE IdPaciente = @IdPac AND Estado = 'PENDIENTE';  -- el alta ya trae alerta por el brote del distrito
+INSERT vac.Alerta (IdPaciente, IdEsquema, TipoAlerta) VALUES (@IdPac, @IdSPR1, 'DOSIS_ATRASADA');
+EXEC vac.usp_CrearHorario @Est, 'SPR', @HoyTarde, 5, @IdHor OUTPUT;
+EXEC vac.usp_ReservarCita @IdPac, @IdHor, @IdSPR1, NULL, @IdCita OUTPUT;
+SET @StockAntes = (SELECT s.Cantidad FROM vac.StockLote s JOIN vac.LoteVacuna l ON l.IdLote = s.IdLote WHERE l.NumeroLote = @LoteSPR AND s.IdEstablecimiento = @Est);
+BEGIN TRY
+    EXEC vac.usp_AtenderCita @IdCita, @LoteSPR, @Dni, @IdAtendida OUTPUT;
+    SET @Err = CONCAT((SELECT Estado FROM vac.Cita WHERE IdCita = @IdCita), '/',
+                      (SELECT COUNT(*) FROM vac.DosisAplicada WHERE IdPaciente = @IdPac AND IdEsquema = @IdSPR1), '/',
+                      @StockAntes - (SELECT s.Cantidad FROM vac.StockLote s JOIN vac.LoteVacuna l ON l.IdLote = s.IdLote WHERE l.NumeroLote = @LoteSPR AND s.IdEstablecimiento = @Est), '/',
+                      (SELECT Estado FROM vac.Alerta WHERE IdPaciente = @IdPac AND IdEsquema = @IdSPR1 AND TipoAlerta = 'DOSIS_ATRASADA'));
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_AtenderCita', 'Registra la dosis, descuenta stock, atiende la cita y cierra la alerta', 'ATENDIDA/1/1/ATENDIDA', @Err);
+
+/* H34. Sin stock: la dosis falla y la cita NO cambia (todo o nada) */
+BEGIN TRANSACTION;
+EXEC vac.usp_RegistrarPaciente 'DNI', '89050001', 'Prueba', 'Uno', NULL, @Nac20m, 'M', '230104', NULL, NULL, @IdPac OUTPUT;
+EXEC vac.usp_CrearHorario @Est, 'SPR', @HoyTarde, 5, @IdHor OUTPUT;
+EXEC vac.usp_ReservarCita @IdPac, @IdHor, @IdSPR1, NULL, @IdCita OUTPUT;
+UPDATE s SET Cantidad = 0 FROM vac.StockLote s JOIN vac.LoteVacuna l ON l.IdLote = s.IdLote WHERE l.NumeroLote = @LoteSPR AND s.IdEstablecimiento = @Est;
+BEGIN TRY
+    EXEC vac.usp_AtenderCita @IdCita, @LoteSPR, @Dni, @IdAtendida OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+SET @Err = CONCAT(@Err, '/', (SELECT Estado FROM vac.Cita WHERE IdCita = @IdCita));
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_AtenderCita', 'Sin stock: rechaza y la cita sigue PROGRAMADA', '50107/PROGRAMADA', @Err);
+
+/* H35. Solo se atiende el día de la franja */
+BEGIN TRANSACTION;
+EXEC vac.usp_RegistrarPaciente 'DNI', '89050001', 'Prueba', 'Uno', NULL, @Nac20m, 'M', '230104', NULL, NULL, @IdPac OUTPUT;
+EXEC vac.usp_CrearHorario @Est, 'SPR', @Franja, 5, @IdHor OUTPUT;
+EXEC vac.usp_ReservarCita @IdPac, @IdHor, @IdSPR1, NULL, @IdCita OUTPUT;
+BEGIN TRY
+    EXEC vac.usp_AtenderCita @IdCita, @LoteSPR, @Dni, @IdAtendida OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_AtenderCita', 'Rechaza atender fuera del día de la franja', '50140', @Err);
+
+/* H36. No se atiende una cita cancelada */
+BEGIN TRANSACTION;
+EXEC vac.usp_RegistrarPaciente 'DNI', '89050001', 'Prueba', 'Uno', NULL, @Nac20m, 'M', '230104', NULL, NULL, @IdPac OUTPUT;
+EXEC vac.usp_CrearHorario @Est, 'SPR', @HoyTarde, 5, @IdHor OUTPUT;
+EXEC vac.usp_ReservarCita @IdPac, @IdHor, @IdSPR1, NULL, @IdCita OUTPUT;
+UPDATE vac.Cita SET Estado = 'CANCELADA' WHERE IdCita = @IdCita;
+BEGIN TRY
+    EXEC vac.usp_AtenderCita @IdCita, @LoteSPR, @Dni, @IdAtendida OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_AtenderCita', 'Rechaza atender una cita que no está programada', '50139', @Err);
+
+/* H37. Lote inexistente: usa las validaciones de usp_RegistrarDosis y la cita no cambia */
+BEGIN TRANSACTION;
+EXEC vac.usp_RegistrarPaciente 'DNI', '89050001', 'Prueba', 'Uno', NULL, @Nac20m, 'M', '230104', NULL, NULL, @IdPac OUTPUT;
+EXEC vac.usp_CrearHorario @Est, 'SPR', @HoyTarde, 5, @IdHor OUTPUT;
+EXEC vac.usp_ReservarCita @IdPac, @IdHor, @IdSPR1, NULL, @IdCita OUTPUT;
+BEGIN TRY
+    EXEC vac.usp_AtenderCita @IdCita, 'NO-EXISTE', @Dni, @IdAtendida OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+SET @Err = CONCAT(@Err, '/', (SELECT Estado FROM vac.Cita WHERE IdCita = @IdCita));
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_AtenderCita', 'Lote inexistente: rechaza y la cita sigue PROGRAMADA', '50012/PROGRAMADA', @Err);
+
+/* H38. Inasistencia: NO_ASISTIO, alerta INASISTENCIA pendiente y sin tocar el stock */
+BEGIN TRANSACTION;
+EXEC vac.usp_RegistrarPaciente 'DNI', '89050001', 'Prueba', 'Uno', NULL, @Nac20m, 'M', '230104', NULL, NULL, @IdPac OUTPUT;
+UPDATE vac.Alerta SET Estado = 'DESCARTADA', FechaAtencion = SYSDATETIME() WHERE IdPaciente = @IdPac AND Estado = 'PENDIENTE';  -- el alta ya trae alerta por el brote del distrito
+INSERT vac.HorarioAtencion (IdEstablecimiento, IdVacuna, FechaHora, CupoMaximo) SELECT @Est, IdVacuna, @Ayer, 5 FROM vac.Vacuna WHERE Codigo = 'SPR';
+SET @IdHor = SCOPE_IDENTITY();
+INSERT vac.Cita (IdHorario, IdPaciente, IdEsquema) VALUES (@IdHor, @IdPac, @IdSPR1);
+SET @IdCita = SCOPE_IDENTITY();
+SET @StockAntes = (SELECT SUM(Cantidad) FROM vac.StockLote);
+BEGIN TRY
+    EXEC vac.usp_RegistrarInasistencia @IdCita, @Alerta OUTPUT;
+    SET @Err = CONCAT((SELECT Estado FROM vac.Cita WHERE IdCita = @IdCita), '/', @Alerta, '/',
+                      (SELECT COUNT(*) FROM vac.Alerta WHERE IdPaciente = @IdPac AND IdEsquema = @IdSPR1 AND TipoAlerta = 'INASISTENCIA' AND Estado = 'PENDIENTE'), '/',
+                      @StockAntes - (SELECT SUM(Cantidad) FROM vac.StockLote));
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_RegistrarInasistencia', 'RN-18: marca NO_ASISTIO, crea la alerta y no consume stock', 'NO_ASISTIO/1/1/0', @Err);
+
+/* H39. Inasistencia antes de que pase la franja */
+BEGIN TRANSACTION;
+EXEC vac.usp_RegistrarPaciente 'DNI', '89050001', 'Prueba', 'Uno', NULL, @Nac20m, 'M', '230104', NULL, NULL, @IdPac OUTPUT;
+EXEC vac.usp_CrearHorario @Est, 'SPR', @Franja, 5, @IdHor OUTPUT;
+EXEC vac.usp_ReservarCita @IdPac, @IdHor, @IdSPR1, NULL, @IdCita OUTPUT;
+BEGIN TRY
+    EXEC vac.usp_RegistrarInasistencia @IdCita, @Alerta OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_RegistrarInasistencia', 'Rechaza marcar inasistencia antes de la hora', '50141', @Err);
+
+/* H40. Si ya hay una alerta pendiente para la dosis no se duplica */
+BEGIN TRANSACTION;
+EXEC vac.usp_RegistrarPaciente 'DNI', '89050001', 'Prueba', 'Uno', NULL, @Nac20m, 'M', '230104', NULL, NULL, @IdPac OUTPUT;
+UPDATE vac.Alerta SET Estado = 'DESCARTADA', FechaAtencion = SYSDATETIME() WHERE IdPaciente = @IdPac AND Estado = 'PENDIENTE';  -- el alta ya trae alerta por el brote del distrito
+INSERT vac.Alerta (IdPaciente, IdEsquema, TipoAlerta) VALUES (@IdPac, @IdSPR1, 'DOSIS_ATRASADA');
+INSERT vac.HorarioAtencion (IdEstablecimiento, IdVacuna, FechaHora, CupoMaximo) SELECT @Est, IdVacuna, @Ayer, 5 FROM vac.Vacuna WHERE Codigo = 'SPR';
+SET @IdHor = SCOPE_IDENTITY();
+INSERT vac.Cita (IdHorario, IdPaciente, IdEsquema) VALUES (@IdHor, @IdPac, @IdSPR1);
+SET @IdCita = SCOPE_IDENTITY();
+BEGIN TRY
+    EXEC vac.usp_RegistrarInasistencia @IdCita, @Alerta OUTPUT;
+    SET @Err = CONCAT((SELECT Estado FROM vac.Cita WHERE IdCita = @IdCita), '/', @Alerta, '/',
+                      (SELECT COUNT(*) FROM vac.Alerta WHERE IdPaciente = @IdPac AND IdEsquema = @IdSPR1 AND Estado = 'PENDIENTE'));
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_RegistrarInasistencia', 'No duplica la alerta pendiente de la dosis', 'NO_ASISTIO/0/1', @Err);
+
+/* H41. La alerta de inasistencia se cierra sola cuando después se aplica la dosis */
+BEGIN TRANSACTION;
+EXEC vac.usp_RegistrarPaciente 'DNI', '89050001', 'Prueba', 'Uno', NULL, @Nac20m, 'M', '230104', NULL, NULL, @IdPac OUTPUT;
+UPDATE vac.Alerta SET Estado = 'DESCARTADA', FechaAtencion = SYSDATETIME() WHERE IdPaciente = @IdPac AND Estado = 'PENDIENTE';  -- el alta ya trae alerta por el brote del distrito
+INSERT vac.HorarioAtencion (IdEstablecimiento, IdVacuna, FechaHora, CupoMaximo) SELECT @Est, IdVacuna, @Ayer, 5 FROM vac.Vacuna WHERE Codigo = 'SPR';
+SET @IdHor = SCOPE_IDENTITY();
+INSERT vac.Cita (IdHorario, IdPaciente, IdEsquema) VALUES (@IdHor, @IdPac, @IdSPR1);
+SET @IdCita = SCOPE_IDENTITY();
+EXEC vac.usp_RegistrarInasistencia @IdCita, @Alerta OUTPUT;
+EXEC vac.usp_RegistrarDosis '89050001', 'SPR', 1, @LoteSPR, @Est, @Dni, NULL, NULL, @IdDosis OUTPUT;
+SET @Err = (SELECT Estado FROM vac.Alerta WHERE IdPaciente = @IdPac AND IdEsquema = @IdSPR1 AND TipoAlerta = 'INASISTENCIA');
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_RegistrarInasistencia', 'Aplicar la dosis cierra la alerta de inasistencia', 'ATENDIDA', @Err);
+
 SELECT Caso, IIF(Esperado = Obtenido, 'OK', 'FALLA') AS Resultado, Objeto, Prueba, Esperado, Obtenido
 FROM @R ORDER BY Caso;
 SELECT SUM(IIF(Esperado = Obtenido, 1, 0)) AS Correctas, COUNT(*) AS Total FROM @R;

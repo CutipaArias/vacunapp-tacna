@@ -427,3 +427,130 @@ BEGIN
     END CATCH;
 END
 GO
+
+/* ---------------------------------------------------------------------
+   Alerta INASISTENCIA (RN-18): seguimiento del paciente que faltó a su
+   cita. Es una alerta de paciente y dosis, igual que DOSIS_ATRASADA.
+   --------------------------------------------------------------------- */
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_Alerta_Tipo' AND definition LIKE N'%INASISTENCIA%')
+BEGIN
+    ALTER TABLE vac.Alerta DROP CONSTRAINT CK_Alerta_Origen;
+    ALTER TABLE vac.Alerta DROP CONSTRAINT CK_Alerta_Tipo;
+    ALTER TABLE vac.Alerta ADD CONSTRAINT CK_Alerta_Tipo
+        CHECK (TipoAlerta IN ('ZONA_BROTE', 'DOSIS_ATRASADA', 'STOCK_BAJO', 'LOTE_POR_VENCER', 'INASISTENCIA'));
+    ALTER TABLE vac.Alerta ADD CONSTRAINT CK_Alerta_Origen CHECK (
+        (TipoAlerta IN ('ZONA_BROTE', 'DOSIS_ATRASADA', 'INASISTENCIA') AND IdPaciente IS NOT NULL AND IdEsquema IS NOT NULL AND IdStock IS NULL)
+     OR (TipoAlerta IN ('STOCK_BAJO', 'LOTE_POR_VENCER') AND IdStock IS NOT NULL AND IdPaciente IS NULL AND IdEsquema IS NULL));
+END
+GO
+
+/* ---------------------------------------------------------------------
+   usp_AtenderCita (RF-07, CU07): el vacunador atiende una cita PROGRAMADA
+   el día de la franja. Registra la dosis con vac.usp_RegistrarDosis (las
+   mismas validaciones y el mismo descuento de stock que el registro
+   directo; no se duplica lógica) y marca la cita ATENDIDA, todo en una
+   transacción: si la dosis falla (p. ej. sin stock) la cita no cambia.
+   Mismo orden de bloqueos que el resto del módulo: paciente+dosis primero.
+   --------------------------------------------------------------------- */
+CREATE OR ALTER PROCEDURE vac.usp_AtenderCita
+    @IdCita        INT,
+    @NumeroLote    VARCHAR(20),
+    @DniVacunador  CHAR(8),
+    @IdDosis       BIGINT OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @propia BIT = IIF(@@TRANCOUNT = 0, 1, 0);
+    DECLARE @IdPaciente INT, @IdEsquema SMALLINT, @Estado VARCHAR(12), @FechaHora DATETIME2(0), @IdEst SMALLINT;
+    DECLARE @Documento VARCHAR(12), @Vacuna VARCHAR(10), @NumeroDosis TINYINT;
+
+    BEGIN TRY
+        IF @propia = 1 BEGIN TRANSACTION;
+
+        SELECT @IdPaciente = IdPaciente, @IdEsquema = IdEsquema FROM vac.Cita WHERE IdCita = @IdCita;
+        IF @IdPaciente IS NULL THROW 50136, 'La cita no existe.', 1;
+
+        DECLARE @recurso NVARCHAR(100) = CONCAT(N'cita:', @IdPaciente, N':', @IdEsquema), @rc INT;
+        EXEC @rc = sp_getapplock @Resource = @recurso, @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 10000;
+        IF @rc < 0 THROW 50135, 'El sistema está ocupado; intente de nuevo en unos segundos.', 1;
+
+        SELECT @Estado = c.Estado, @FechaHora = h.FechaHora, @IdEst = h.IdEstablecimiento
+        FROM vac.Cita c JOIN vac.HorarioAtencion h ON h.IdHorario = c.IdHorario
+        WHERE c.IdCita = @IdCita;
+
+        IF @Estado <> 'PROGRAMADA' THROW 50139, 'Solo se puede atender o marcar inasistencia en una cita programada.', 1;
+        IF CAST(@FechaHora AS DATE) <> CAST(SYSDATETIME() AS DATE)
+            THROW 50140, 'Solo se puede atender la cita el día de la franja.', 1;
+
+        SELECT @Documento = p.NumeroDocumento FROM vac.Paciente p WHERE p.IdPaciente = @IdPaciente;
+        SELECT @Vacuna = v.Codigo, @NumeroDosis = e.NumeroDosis
+        FROM vac.EsquemaDosis e JOIN vac.Vacuna v ON v.IdVacuna = e.IdVacuna WHERE e.IdEsquema = @IdEsquema;
+
+        -- Mismas validaciones y descuento de stock que el registro directo de una dosis.
+        EXEC vac.usp_RegistrarDosis @Documento, @Vacuna, @NumeroDosis, @NumeroLote, @IdEst, @DniVacunador, NULL, NULL, @IdDosis OUTPUT;
+
+        UPDATE vac.Cita SET Estado = 'ATENDIDA' WHERE IdCita = @IdCita;
+
+        IF @propia = 1 COMMIT;
+    END TRY
+    BEGIN CATCH
+        IF @propia = 1 AND XACT_STATE() <> 0 ROLLBACK;
+        THROW;
+    END CATCH;
+END
+GO
+
+/* ---------------------------------------------------------------------
+   usp_RegistrarInasistencia (RF-07, RN-18): una cita PROGRAMADA cuya hora
+   ya pasó se marca NO_ASISTIO y se deja una alerta INASISTENCIA para el
+   seguimiento (si no hay ya una alerta pendiente de esa dosis). No toca
+   el stock. La dosis queda libre para reservar de nuevo.
+   --------------------------------------------------------------------- */
+CREATE OR ALTER PROCEDURE vac.usp_RegistrarInasistencia
+    @IdCita          INT,
+    @AlertaCreada    BIT OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @propia BIT = IIF(@@TRANCOUNT = 0, 1, 0);
+    DECLARE @IdPaciente INT, @IdEsquema SMALLINT, @Estado VARCHAR(12), @FechaHora DATETIME2(0);
+    SET @AlertaCreada = 0;
+
+    BEGIN TRY
+        IF @propia = 1 BEGIN TRANSACTION;
+
+        SELECT @IdPaciente = IdPaciente, @IdEsquema = IdEsquema FROM vac.Cita WHERE IdCita = @IdCita;
+        IF @IdPaciente IS NULL THROW 50136, 'La cita no existe.', 1;
+
+        DECLARE @recurso NVARCHAR(100) = CONCAT(N'cita:', @IdPaciente, N':', @IdEsquema), @rc INT;
+        EXEC @rc = sp_getapplock @Resource = @recurso, @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 10000;
+        IF @rc < 0 THROW 50135, 'El sistema está ocupado; intente de nuevo en unos segundos.', 1;
+
+        SELECT @Estado = c.Estado, @FechaHora = h.FechaHora
+        FROM vac.Cita c JOIN vac.HorarioAtencion h ON h.IdHorario = c.IdHorario
+        WHERE c.IdCita = @IdCita;
+
+        IF @Estado <> 'PROGRAMADA' THROW 50139, 'Solo se puede atender o marcar inasistencia en una cita programada.', 1;
+        IF @FechaHora > SYSDATETIME()
+            THROW 50141, 'Solo se puede marcar la inasistencia cuando la hora de la cita ya pasó.', 1;
+
+        UPDATE vac.Cita SET Estado = 'NO_ASISTIO' WHERE IdCita = @IdCita;
+
+        IF NOT EXISTS (SELECT 1 FROM vac.Alerta WHERE IdPaciente = @IdPaciente AND IdEsquema = @IdEsquema AND Estado = 'PENDIENTE')
+        BEGIN
+            INSERT vac.Alerta (IdPaciente, IdEsquema, TipoAlerta) VALUES (@IdPaciente, @IdEsquema, 'INASISTENCIA');
+            SET @AlertaCreada = 1;
+        END
+
+        IF @propia = 1 COMMIT;
+    END TRY
+    BEGIN CATCH
+        IF @propia = 1 AND XACT_STATE() <> 0 ROLLBACK;
+        THROW;
+    END CATCH;
+END
+GO
