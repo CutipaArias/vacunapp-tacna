@@ -30,7 +30,7 @@ Plan: [plan.md](plan.md) · Spec: [../SPEC.md](../SPEC.md)
   - Files: `database/08_seguridad.sql`, `database/07_pruebas.sql`, `desplegar.ps1`
   - Deps: T0.2
 
-- [ ] **T1.2 Login/logout por cookie con `PasswordHasher`** (M) — CU01
+- [x] **T1.2 Login/logout por cookie con `PasswordHasher`** (M) — CU01
   - Acceptance: `POST /api/login` verifica hash PBKDF2 (PasswordHasher); credenciales malas o usuario inactivo → 401 con mensaje en español sin revelar cuál falló; cookie `HttpOnly`, `SameSite=Strict`, `Secure` fuera de Development; `POST /api/logout`; `GET /api/yo` devuelve rol y establecimiento.
   - Verify: tests xUnit: login ok, login mal, usuario inactivo, logout, `/api/yo` sin sesión → 401
   - Files: `panel/Program.cs`, `panel/Auth/AuthEndpoints.cs`, `panel/Data/UsuarioRepo.cs`, `tests/…/AuthTests.cs`

@@ -1,5 +1,8 @@
 using System.Data;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.SqlClient;
+using VacunApp.Panel.Auth;
+using VacunApp.Panel.Data;
 
 // Interfaz mínima de consulta de VacunApp Tacna.
 // Toda la lógica vive en la base de datos (vistas, procedimientos y triggers);
@@ -7,7 +10,12 @@ using Microsoft.Data.SqlClient;
 
 var builder = WebApplication.CreateBuilder(args);
 var connectionString = builder.Configuration.GetConnectionString("VacunApp")
-    ?? throw new InvalidOperationException("Falta ConnectionStrings:VacunApp en appsettings.json");
+    ?? throw new InvalidOperationException(
+        "Falta ConnectionStrings:VacunApp: use appsettings.Development.json (vea el .example) o la variable ConnectionStrings__VacunApp.");
+
+var db = new Db(connectionString);
+builder.Services.AddSingleton(db);
+builder.Services.AddAutenticacion(builder.Environment);
 
 var app = builder.Build();
 
@@ -24,8 +32,15 @@ app.Use(async (ctx, next) =>
 
 app.UseDefaultFiles();
 app.UseStaticFiles();
+app.UseAuthentication();
+app.UseAuthorization();
 
-var db = new Db(connectionString);
+app.MapAutenticacion();
+await SeedUsuarios.EjecutarAsync(
+    app.Services.GetRequiredService<UsuarioRepo>(),
+    app.Services.GetRequiredService<IPasswordHasher<CuentaUsuario>>(),
+    app.Configuration,
+    app.Logger);
 
 app.MapGet("/api/resumen", async () =>
     Results.Ok((await db.QueryAsync("SELECT * FROM vac.vw_ResumenGeneral"))[0].FirstOrDefault()));
