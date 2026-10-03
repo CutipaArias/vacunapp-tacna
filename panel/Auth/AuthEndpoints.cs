@@ -26,10 +26,25 @@ static class AuthEndpoints
                 o.ExpireTimeSpan = TimeSpan.FromHours(8);
                 o.SlidingExpiration = false;
                 // Es una API: sin sesión se responde 401/403, nunca una redirección HTML.
+                // Cada solicitud revalida la cuenta: una baja o un cambio de rol/establecimiento
+                // surte efecto de inmediato, sin esperar a que venza la cookie.
+                o.Events.OnValidatePrincipal = async ctx =>
+                {
+                    var vigente = int.TryParse(ctx.Principal?.FindFirstValue(ClaimTypes.NameIdentifier), out var id)
+                        ? await ctx.HttpContext.RequestServices.GetRequiredService<UsuarioRepo>().BuscarPorIdAsync(id)
+                        : null;
+                    if (vigente is null || !vigente.Activo
+                        || vigente.Rol != ctx.Principal!.FindFirstValue(ClaimTypes.Role)
+                        || vigente.IdEstablecimiento?.ToString() != ctx.Principal.FindFirstValue(ClaimEstablecimiento))
+                    {
+                        ctx.RejectPrincipal();
+                        await ctx.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                    }
+                };
                 o.Events.OnRedirectToLogin = ctx => { ctx.Response.StatusCode = StatusCodes.Status401Unauthorized; return Task.CompletedTask; };
                 o.Events.OnRedirectToAccessDenied = ctx => { ctx.Response.StatusCode = StatusCodes.Status403Forbidden; return Task.CompletedTask; };
             });
-        services.AddAuthorization();
+        services.AddAuthorization(Politicas.Configurar);
         return services;
     }
 
@@ -68,13 +83,13 @@ static class AuthEndpoints
             var principal = new ClaimsPrincipal(identidad);
             await ctx.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
             return Results.Ok(Perfil(principal, cuenta.NombreCompleto));
-        });
+        }).AllowAnonymous();
 
         app.MapPost("/api/logout", async (HttpContext ctx) =>
         {
             await ctx.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
             return Results.NoContent();
-        });
+        }).AllowAnonymous();
 
         app.MapGet("/api/yo", (ClaimsPrincipal user) => Results.Ok(Perfil(user, null))).RequireAuthorization();
     }

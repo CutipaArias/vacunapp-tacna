@@ -36,7 +36,7 @@ Plan: [plan.md](plan.md) · Spec: [../SPEC.md](../SPEC.md)
   - Files: `panel/Program.cs`, `panel/Auth/AuthEndpoints.cs`, `panel/Data/UsuarioRepo.cs`, `tests/…/AuthTests.cs`
   - Deps: T1.1
 
-- [ ] **T1.3 Políticas por rol y alcance por establecimiento (RN-22)** (M)
+- [x] **T1.3 Políticas por rol y alcance por establecimiento (RN-22)** (M)
   - Acceptance: todo `/api/*` existente exige sesión; políticas `Vacunador/Jefe/Epidemiologo/Ciudadano/Administrador`; helper `Alcance` filtra por establecimiento para vacunador/jefe; acceso fuera de alcance → 403.
   - Verify: tests xUnit matriz rol × endpoint (403/200) 
   - Files: `panel/Auth/Politicas.cs`, `panel/Auth/Alcance.cs`, `panel/Program.cs`, `tests/…/AutorizacionTests.cs`

@@ -1,3 +1,4 @@
+using System.Net.Http.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.SqlClient;
@@ -29,6 +30,15 @@ public sealed class AppFactory : WebApplicationFactory<Program>
     }
 
     public string ClaveDe(string usuario) => usuario == "admin" ? ClaveAdmin : ClaveGeneral;
+
+    /// <summary>Cliente con la cookie de sesión de un usuario semilla ya iniciada.</summary>
+    public async Task<HttpClient> SesionComoAsync(string usuario)
+    {
+        var c = CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = true });
+        var r = await c.PostAsJsonAsync("/api/login", new { usuario, clave = ClaveDe(usuario) });
+        r.EnsureSuccessStatusCode();
+        return c;
+    }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {

@@ -8,16 +8,22 @@ sealed record CuentaUsuario(
 /// <summary>Acceso a datos de usuarios. Todas las consultas usan parámetros tipados.</summary>
 sealed class UsuarioRepo(Db db)
 {
-    public async Task<CuentaUsuario?> BuscarAsync(string nombreUsuario)
+    const string SelectCuenta =
+        """
+        SELECT u.IdUsuario, u.NombreUsuario, u.NombreCompleto, u.ClaveHash, r.Nombre AS Rol,
+               u.IdEstablecimiento, u.IdVacunador, u.Activo
+        FROM vac.Usuario u JOIN vac.Rol r ON r.IdRol = u.IdRol
+        """;
+
+    public Task<CuentaUsuario?> BuscarAsync(string nombreUsuario) =>
+        BuscarUnoAsync(SelectCuenta + " WHERE u.NombreUsuario = @Valor", ("@Valor", nombreUsuario));
+
+    public Task<CuentaUsuario?> BuscarPorIdAsync(int idUsuario) =>
+        BuscarUnoAsync(SelectCuenta + " WHERE u.IdUsuario = @Valor", ("@Valor", idUsuario));
+
+    async Task<CuentaUsuario?> BuscarUnoAsync(string sql, (string, object?) parametro)
     {
-        var r = await db.QueryAsync(
-            """
-            SELECT u.IdUsuario, u.NombreUsuario, u.NombreCompleto, u.ClaveHash, r.Nombre AS Rol,
-                   u.IdEstablecimiento, u.IdVacunador, u.Activo
-            FROM vac.Usuario u JOIN vac.Rol r ON r.IdRol = u.IdRol
-            WHERE u.NombreUsuario = @Nombre
-            """,
-            ("@Nombre", nombreUsuario));
+        var r = await db.QueryAsync(sql, parametro);
         var f = r[0].FirstOrDefault();
         return f is null ? null : new CuentaUsuario(
             (int)f["IdUsuario"]!, (string)f["NombreUsuario"]!, (string)f["NombreCompleto"]!, (string?)f["ClaveHash"],

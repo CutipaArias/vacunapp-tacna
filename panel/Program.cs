@@ -1,4 +1,5 @@
 using System.Data;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.SqlClient;
 using VacunApp.Panel.Auth;
@@ -36,24 +37,28 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapAutenticacion();
+
+// RN-22: consultas regionales (epidemiólogo y administrador) y consultas clínicas (más jefe y vacunador).
+var regional = app.MapGroup("/api").RequireAuthorization(Politicas.Regional);
+var clinica = app.MapGroup("/api").RequireAuthorization(Politicas.ConsultaClinica);
 await SeedUsuarios.EjecutarAsync(
     app.Services.GetRequiredService<UsuarioRepo>(),
     app.Services.GetRequiredService<IPasswordHasher<CuentaUsuario>>(),
     app.Configuration,
     app.Logger);
 
-app.MapGet("/api/resumen", async () =>
+regional.MapGet("/resumen", async () =>
     Results.Ok((await db.QueryAsync("SELECT * FROM vac.vw_ResumenGeneral"))[0].FirstOrDefault()));
 
-app.MapGet("/api/sarampion", async () =>
+regional.MapGet("/sarampion", async () =>
     Results.Ok((await db.QueryAsync(
         "SELECT * FROM vac.vw_CoberturaSarampion ORDER BY BroteActivo DESC, CoberturaSPR1"))[0]));
 
-app.MapGet("/api/cobertura", async (string? vacuna, byte? dosis, string? provincia) =>
+regional.MapGet("/cobertura", async (string? vacuna, byte? dosis, string? provincia) =>
     Results.Ok((await db.ExecAsync("vac.usp_ReporteCoberturaDistrito",
         ("@CodigoVacuna", vacuna), ("@NumeroDosis", dosis), ("@Provincia", provincia)))[0]));
 
-app.MapGet("/api/alertas", async (string? ubigeo, int? top) =>
+regional.MapGet("/alertas", async (string? ubigeo, int? top) =>
     Results.Ok((await db.QueryAsync(
         """
         SELECT TOP (@Top) * FROM vac.vw_AlertasPendientes
@@ -62,21 +67,21 @@ app.MapGet("/api/alertas", async (string? ubigeo, int? top) =>
         """,
         ("@Top", top ?? 100), ("@Ubigeo", ubigeo)))[0]));
 
-app.MapGet("/api/pendientes", async (string? ubigeo, string? vacuna, bool? soloBrote, int? top) =>
+regional.MapGet("/pendientes", async (string? ubigeo, string? vacuna, bool? soloBrote, int? top) =>
     Results.Ok((await db.ExecAsync("vac.usp_ListarPendientes",
         ("@Ubigeo", ubigeo), ("@CodigoVacuna", vacuna),
         ("@SoloZonaBrote", soloBrote ?? false), ("@Top", top ?? 100)))[0]));
 
-app.MapGet("/api/campanas", async () =>
+regional.MapGet("/campanas", async () =>
     Results.Ok((await db.QueryAsync("SELECT * FROM vac.vw_AvanceCampana ORDER BY IdCampana, PorcentajeAvance"))[0]));
 
-app.MapGet("/api/paciente/{documento}", async (string documento) =>
+clinica.MapGet("/paciente/{documento}", async (string documento) =>
 {
     var r = await db.ExecAsync("vac.usp_HistorialPaciente", ("@NumeroDocumento", documento));
     return Results.Ok(new { datos = r[0].FirstOrDefault(), aplicadas = r[1], pendientes = r[2] });
 });
 
-app.MapGet("/api/catalogos", async () =>
+app.MapGet("/api/catalogos", async (ClaimsPrincipal user) =>
 {
     var r = await db.QueryAsync(
         """
@@ -85,24 +90,27 @@ app.MapGet("/api/catalogos", async () =>
           JOIN vac.Vacuna v ON v.IdVacuna = e.IdVacuna ORDER BY v.Codigo, e.NumeroDosis;
         SELECT es.IdEstablecimiento, es.Nombre, d.Nombre AS Distrito FROM vac.EstablecimientoSalud es
           JOIN vac.Distrito d ON d.IdDistrito = es.IdDistrito ORDER BY d.Nombre, es.Nombre;
-        SELECT Dni, CONCAT(Nombres, ' ', Apellidos) AS Nombre, IdEstablecimiento FROM vac.Vacunador WHERE Activo = 1;
+        SELECT Dni, CONCAT(Nombres, ' ', Apellidos) AS Nombre, IdEstablecimiento FROM vac.Vacunador WHERE Activo = 1 AND (@Regional = 1 OR IdEstablecimiento = @Est);
         SELECT v.Codigo, l.NumeroLote, l.FechaVencimiento FROM vac.LoteVacuna l
           JOIN vac.Vacuna v ON v.IdVacuna = l.IdVacuna
           WHERE l.FechaVencimiento >= CAST(GETDATE() AS DATE) AND YEAR(l.FechaVencimiento) <= YEAR(GETDATE()) + 1
           ORDER BY v.Codigo, l.NumeroLote;
-        """);
+        """,
+        ("@Regional", Alcance.EsRegional(user)), ("@Est", Alcance.Establecimiento(user)));
     return Results.Ok(new { distritos = r[0], esquema = r[1], establecimientos = r[2], personal = r[3], lotes = r[4] });
 });
 
-app.MapPost("/api/dosis", async (NuevaDosis d) =>
+app.MapPost("/api/dosis", async (NuevaDosis d, ClaimsPrincipal user) =>
 {
+    if (!Alcance.PuedeEstablecimiento(user, d.IdEstablecimiento)) return Results.Forbid();   // RN-22
+
     var idDosis = new SqlParameter("@IdDosis", SqlDbType.BigInt) { Direction = ParameterDirection.Output };
     await db.ExecAsync("vac.usp_RegistrarDosis",
         ("@NumeroDocumento", d.Documento), ("@CodigoVacuna", d.Vacuna), ("@NumeroDosis", d.Dosis),
         ("@NumeroLote", d.Lote), ("@IdEstablecimiento", d.IdEstablecimiento), ("@DniVacunador", d.DniVacunador),
         ("@FechaAplicacion", d.Fecha), ("@IdCampana", null), ("@IdDosis", idDosis));
     return Results.Ok(new { idDosis = idDosis.Value });
-});
+}).RequireAuthorization(Politicas.Vacunador);
 
 
 app.Run();
