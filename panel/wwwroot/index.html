@@ -20,7 +20,8 @@
 <nav id="menu" aria-label="Secciones">
   <button data-tab="resumen" data-roles="ADMINISTRADOR EPIDEMIOLOGO" hidden>Resumen</button>
   <button data-tab="cobertura" data-roles="ADMINISTRADOR EPIDEMIOLOGO" hidden>Cobertura por distrito</button>
-  <button data-tab="alertas" data-roles="ADMINISTRADOR EPIDEMIOLOGO" hidden>Alertas</button>
+  <button data-tab="alertas" data-roles="ADMINISTRADOR EPIDEMIOLOGO JEFE_ESTABLECIMIENTO VACUNADOR" hidden>Alertas</button>
+  <button data-tab="pendientes" data-roles="ADMINISTRADOR EPIDEMIOLOGO JEFE_ESTABLECIMIENTO VACUNADOR" hidden>Pendientes</button>
   <button data-tab="brotes" data-roles="ADMINISTRADOR EPIDEMIOLOGO" hidden>Brotes</button>
   <button data-tab="campanas" data-roles="ADMINISTRADOR EPIDEMIOLOGO" hidden>Campañas</button>
   <button data-tab="paciente" data-roles="ADMINISTRADOR EPIDEMIOLOGO JEFE_ESTABLECIMIENTO VACUNADOR CIUDADANO" hidden>Paciente</button>
@@ -60,12 +61,33 @@
   <section id="alertas">
     <div class="card">
       <h2>Alertas pendientes <span class="time" id="t-ale"></span></h2>
-      <p>Generadas por los triggers al declarar un brote o registrar a un paciente en zona de brote, y por el proceso de dosis atrasadas.</p>
+      <p>Generadas al declarar un brote, al registrar a un paciente en zona de brote, por dosis atrasadas y por inasistencias. Se ven las de su alcance.</p>
       <div class="filters">
-        <label>Distrito <select id="a-dis"><option value="">Todos</option></select></label>
+        <label id="a-dis-l">Distrito <select id="a-dis"><option value="">Todos</option></select></label>
+        <label>Tipo <select id="a-tipo"><option value="">Todos</option><option value="ZONA_BROTE">Zona de brote</option><option value="INASISTENCIA">Inasistencia</option><option value="DOSIS_ATRASADA">Dosis atrasada</option></select></label>
         <button class="b" id="b-ale">Consultar</button>
       </div>
       <div class="tbl"><table id="ale"></table></div>
+      <div id="ale-msg" role="alert"></div>
+    </div>
+    <div class="card">
+      <h2>Alertas de stock <span class="time" id="t-ale-stk"></span></h2>
+      <p>Stock bajo y lotes por vencer. Se cierran solas al reponer el stock.</p>
+      <div class="tbl"><table id="ale-stk"></table></div>
+    </div>
+  </section>
+
+  <section id="pendientes">
+    <div class="card">
+      <h2>Dosis pendientes <span class="time" id="t-pen"></span></h2>
+      <p>Pacientes con dosis atrasadas o por aplicar. El personal de establecimiento ve su distrito.</p>
+      <div class="filters">
+        <label id="pe-dis-l">Distrito <select id="pe-dis"><option value="">Todos</option></select></label>
+        <label>Vacuna <select id="pe-vac"><option value="">Todas</option></select></label>
+        <label><input type="checkbox" id="pe-brote"> Solo zona de brote</label>
+        <button class="b" id="b-pen2">Consultar</button>
+      </div>
+      <div class="tbl"><table id="pen-tbl"></table></div>
     </div>
   </section>
 

@@ -169,10 +169,11 @@ Plan: [plan.md](plan.md) · Spec: [../SPEC.md](../SPEC.md)
   - Files: `database/04_procedimientos.sql` (50024–50026, carrera 50022), `panel/Vigilancia/BrotesEndpoints.cs`, pestaña Brotes en `panel/wwwroot/index.html` y `panel.js`, `database/07_pruebas.sql` (H42–H47), `tests/VacunApp.Tests/BrotesTests.cs`
   - Deps: Checkpoint E
 
-- [ ] **T5.2 Alertas y pendientes por alcance (RF-11, RF-12, CU11)** (M)
+- [x] **T5.2 Alertas y pendientes por alcance (RF-11, RF-12, CU11)** (M)
   - Acceptance: alertas de brote, atraso, inasistencia y stock; vacunador/jefe ven su establecimiento, epidemiólogo toda la región; `usp_AtenderAlerta` accesible.
   - Verify: xUnit de alcance; prueba BD de generación sin duplicados
-  - Files: `panel/Vigilancia/AlertasEndpoints.cs`, `panel/wwwroot/alertas.html`, `tests/…`
+  - Files: `panel/Vigilancia/AlertasEndpoints.cs`, `panel/wwwroot` (pestañas Alertas y Pendientes), `tests/VacunApp.Tests/AlertasTests.cs`, `database/07_pruebas.sql` (H48–H51)
+  - Resultado (03/10/2026): 21 pruebas de API, SQL 119/119, suite 265/265. UI no verificada visualmente (sin sesión).
   - Deps: T5.1
 
 - [ ] **T5.3 Dashboard de cobertura con semáforos (RF-13, CU12, RN-21, RNF-01)** (M)

@@ -25,7 +25,7 @@ const tag = v => `<span class="tag ${esc(v)}">${esc(v)}</span>`;
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
   document.querySelectorAll('nav button, section').forEach(x => x.classList.remove('on'));
   b.classList.add('on'); $('#' + b.dataset.tab).classList.add('on');
-  ({ cobertura: cargarCobertura, alertas: cargarAlertas, brotes: cargarBrotes, campanas: cargarCampanas, citas: cargarCitas, 'citas-dia': cargarCitasDia, stock: cargarStock, horarios: cargarHorarios, usuarios: cargarUsuarios, auditoria: cargarAuditoria })[b.dataset.tab]?.();
+  ({ cobertura: cargarCobertura, alertas: cargarAlertas, pendientes: cargarPendientes, brotes: cargarBrotes, campanas: cargarCampanas, citas: cargarCitas, 'citas-dia': cargarCitasDia, stock: cargarStock, horarios: cargarHorarios, usuarios: cargarUsuarios, auditoria: cargarAuditoria })[b.dataset.tab]?.();
 });
 
 async function cargarResumen() {
@@ -61,14 +61,51 @@ async function cargarCobertura() {
   ], r);
 }
 
+// ---- Alertas y pendientes (RF-11, RF-12): el servidor recorta por alcance (RN-22) ----
 async function cargarAlertas() {
-  const r = await api('/api/alertas?' + new URLSearchParams({ ubigeo: $('#a-dis').value, top: 200 }));
-  $('#t-ale').textContent = `· primeras ${r.length} · ${r.__ms} ms`;
+  const q = new URLSearchParams({ top: 200 });
+  for (const [k, v] of [['ubigeo', yo.idEstablecimiento == null ? $('#a-dis').value : ''], ['tipo', $('#a-tipo').value]]) if (v) q.set(k, v);
+  const r = await api('/api/alertas?' + q);
+  $('#t-ale').textContent = `Â· primeras ${r.length} Â· ${r.__ms} ms`;
   table($('#ale'), [
     { h: 'Tipo', f: r => tag(r.TipoAlerta) }, { h: 'DNI', k: 'NumeroDocumento' }, { h: 'Paciente', k: 'Paciente' },
     { h: 'Edad (m)', n: 1, k: 'EdadMeses' }, { h: 'Distrito', k: 'Distrito' },
-    { h: 'Dosis', f: r => `${esc(r.CodigoVacuna)} · ${esc(r.Dosis)}` }, { h: 'Teléfono', k: 'Telefono' },
-    { h: 'Días abierta', n: 1, k: 'DiasAbierta' }
+    { h: 'Dosis', f: r => `${esc(r.CodigoVacuna)} Â· ${esc(r.Dosis)}` }, { h: 'TelÃ©fono', k: 'Telefono' },
+    { h: 'DÃ­as abierta', n: 1, k: 'DiasAbierta' },
+    { h: '', f: r => `<button class="b" data-id="${r.IdAlerta}" data-estado="ATENDIDA">Atender</button> <button class="b sec" data-id="${r.IdAlerta}" data-estado="DESCARTADA">Descartar</button>` }
+  ], r);
+  const s = await api('/api/alertas/stock');
+  $('#t-ale-stk').textContent = `Â· ${s.length} pendientes`;
+  table($('#ale-stk'), [
+    { h: 'Alerta', f: r => esc(TIPOS_ALERTA[r.tipoAlerta] ?? r.tipoAlerta) }, { h: 'Establecimiento', k: 'establecimiento' },
+    { h: 'Vacuna', k: 'vacuna' }, { h: 'Lote', k: 'numeroLote' }, { h: 'Vence', f: r => fecha(r.fechaVencimiento) },
+    { h: 'Existencias', n: 1, f: r => fmt(r.cantidad) }, { h: 'Umbral', n: 1, f: r => fmt(r.umbralMinimo) }
+  ], s);
+}
+
+function prepararAlertas() {
+  $('#a-dis-l').hidden = yo.idEstablecimiento != null;   // el personal de establecimiento solo ve su distrito
+  $('#ale').onclick = async e => {
+    const b = e.target.closest('button[data-id]');
+    if (!b) return;
+    const accion = b.dataset.estado === 'ATENDIDA' ? 'atendida' : 'descartada';
+    if (!confirm(`Â¿Marcar esta alerta como ${accion}?`)) return;
+    try {
+      await api(`/api/alertas/${b.dataset.id}/atender`, json({ estado: b.dataset.estado }));
+      $('#ale-msg').innerHTML = '';
+      await cargarAlertas();
+    } catch (err) { $('#ale-msg').innerHTML = `<div class="msg err">${esc(err.message)}</div>`; }
+  };
+}
+
+async function cargarPendientes() {
+  const q = new URLSearchParams({ top: 200 });
+  for (const [k, v] of [['ubigeo', yo.idEstablecimiento == null ? $('#pe-dis').value : ''], ['vacuna', $('#pe-vac').value], ['soloBrote', $('#pe-brote').checked ? 'true' : '']]) if (v) q.set(k, v);
+  const r = await api('/api/pendientes?' + q);
+  $('#t-pen').textContent = `Â· primeras ${r.length} Â· ${r.__ms} ms`;
+  table($('#pen-tbl'), [
+    { h: 'DNI', k: 'NumeroDocumento' }, { h: 'Paciente', k: 'Paciente' }, { h: 'Edad (m)', n: 1, k: 'EdadMeses' }, { h: 'Distrito', k: 'Distrito' },
+    { h: 'Pendiente', f: r => `${esc(r.CodigoVacuna)} Â· ${esc(r.Dosis)}` }, { h: 'Meses de atraso', n: 1, k: 'MesesAtraso' }, { h: 'TelÃ©fono', k: 'Telefono' }
   ], r);
 }
 
@@ -575,8 +612,12 @@ async function init() {
   $('#r-est').innerHTML = cat.establecimientos
     .filter(e => yo.idEstablecimiento == null || e.IdEstablecimiento === yo.idEstablecimiento)
     .map(e => `<option value="${e.IdEstablecimiento}">${esc(e.Nombre)} (${esc(e.Distrito)})</option>`).join('');
-  $('#b-cob').onclick = cargarCobertura; $('#b-ale').onclick = cargarAlertas; $('#b-pac').onclick = buscarPaciente;
+  $('#b-cob').onclick = cargarCobertura; $('#b-ale').onclick = cargarAlertas; $('#b-pen2').onclick = cargarPendientes; $('#b-pac').onclick = buscarPaciente;
   $('#p-doc').onkeydown = e => { if (e.key === 'Enter') buscarPaciente(); };  // sin devolver false: cancelaría las teclas
+  $('#pe-dis').innerHTML += cat.distritos.map(d => `<option value="${esc(d.Ubigeo)}">${esc(d.Nombre)}</option>`).join('');
+  $('#pe-vac').innerHTML += [...new Set(cat.esquema.map(e => e.Codigo))].map(c => `<option>${esc(c)}</option>`).join('');
+  $('#pe-dis-l').hidden = yo.idEstablecimiento != null;
+  if (tabs.includes('alertas')) prepararAlertas();
   if (tabs.includes('brotes')) prepararBrotes();
   if (tabs.includes('citas')) prepararCitas();
   if (tabs.includes('citas-dia')) prepararCitasDia();
