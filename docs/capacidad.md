@@ -1,0 +1,57 @@
+# Prueba de capacidad (03/10/2026)
+
+Objetivo: comprobar que el volumen del proyecto cabe en los límites del plan gratuito de MonsterASP.NET
+(256 MB de RAM, 1 GB de base de datos). Supuestos: los 256 MB se aplican al proceso de la aplicación y SQL Server
+corre en un servidor aparte; ambos supuestos deben confirmarse con el panel del hosting.
+
+## Volumen cargado
+| Tabla | Filas |
+|---|---|
+| Paciente | 20 000 |
+| DosisAplicada | 309 393 |
+| Alerta | 33 151 |
+| StockLote / MovimientoStock | 2 040 / 2 048 |
+
+## Tamaño de la base (SQL Server 2022, `sp_spaceused`)
+| Concepto | Tamaño |
+|---|---|
+| Datos reservados (tablas + índices) | 57 MB (datos 20 MB, índices 32 MB) |
+| Archivo de datos (.mdf) | 72 MB |
+| Archivo de registro (.ldf) | 200 MB (tamaño inicial del contenedor local, casi vacío) |
+| Total en disco | 272 MB (27 % de 1 GB) |
+| Mayor tabla: DosisAplicada | 39 MB para 309 393 filas (≈ 0,13 KB por dosis) |
+
+Extrapolación: con el registro en 200 MB, la parte de datos puede crecer a ~800 MB, es decir ~14 veces el volumen actual
+(≈ 4 millones de dosis) antes de llegar al límite. Si el hosting cuenta el registro de transacciones, conviene
+`ALTER DATABASE … SET RECOVERY SIMPLE` y un archivo de registro pequeño (local está en FULL).
+
+## Memoria de la aplicación bajo carga
+Compilación Release, 10 usuarios concurrentes durante 90 s (4 epidemiólogos con el tablero regional, 4 vacunadores
+con carné y altas, 2 jefes con stock): 85 651 solicitudes, ≈ 950 por segundo.
+
+| Métrica | Valor |
+|---|---|
+| Memoria de trabajo al iniciar | 71 MB |
+| Memoria de trabajo media | 121 MB |
+| **Memoria de trabajo pico** | **145 MB** (57 % de 256 MB) |
+| Memoria privada pico | 82 MB |
+
+## Tiempos de respuesta bajo esa carga
+| Operación | p50 | p95 |
+|---|---|---|
+| Carné por DNI | 5 ms | 11 ms |
+| Stock del jefe / alertas de stock | 3 ms / 8 ms | 9 ms / 17 ms |
+| Resumen / sarampión | 262 / 252 ms | 473 / 342 ms |
+| Alertas / campañas | 566 / 541 ms | 727 / 1 004 ms |
+| Cobertura por distrito | 1 061 ms | 1 476 ms |
+
+Los errores de la corrida (7 558) fueron altas de prueba rechazadas a propósito por la base (documento duplicado al
+repetirse DNI aleatorios y dosis sin stock en el lote usado); ninguna lectura falló.
+
+## Fuera de la medición
+`GET /api/pendientes` (`vac.usp_ListarPendientes`) tarda de 15 a 40 s con este volumen. No se incluyó en la carga; su
+optimización está en una tarea aparte y es requisito de T5.2.
+
+## Reproducir
+Generador de carga temporal (no incluido en el repositorio): inicia sesión con los usuarios semilla y repite las consultas
+anteriores mientras mide `WorkingSet64` del proceso de la aplicación cada 0,5 s.
