@@ -11,13 +11,12 @@ namespace VacunApp.Tests;
 [Collection("api")]
 public class AutorizacionTests(AppFactory app)
 {
-    // Endpoints de consulta regional: hoy solo epidemiólogo y administrador (jefe y vacunador, con alcance, llegan en T5.x).
+    // Endpoints de consulta regional: solo epidemiólogo y administrador. Alertas y pendientes ya no están aquí:
+    // desde T5.2 también los consulta el personal de establecimiento, con alcance (AlertasTests).
     [Theory]
     [InlineData("/api/resumen")]
     [InlineData("/api/sarampion")]
     [InlineData("/api/cobertura")]
-    [InlineData("/api/alertas")]
-    [InlineData("/api/pendientes?ubigeo=230104&top=5")]
     [InlineData("/api/campanas")]
     public async Task Consultas_regionales_solo_para_admin_y_epidemiologo(string url)
     {

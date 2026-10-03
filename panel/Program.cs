@@ -86,6 +86,7 @@ app.MapHorarios();
 app.MapCitas();
 app.MapAtencion();
 app.MapBrotes();
+app.MapAlertas();
 
 // RN-22: las consultas regionales son solo del epidemiólogo y el administrador.
 var regional = app.MapGroup("/api").RequireAuthorization(Politicas.Regional);
@@ -105,20 +106,6 @@ regional.MapGet("/sarampion", async () =>
 regional.MapGet("/cobertura", async (string? vacuna, byte? dosis, string? provincia) =>
     Results.Ok((await db.ExecAsync("vac.usp_ReporteCoberturaDistrito",
         ("@CodigoVacuna", vacuna), ("@NumeroDosis", dosis), ("@Provincia", provincia)))[0]));
-
-regional.MapGet("/alertas", async (string? ubigeo, int? top) =>
-    Results.Ok((await db.QueryAsync(
-        """
-        SELECT TOP (@Top) * FROM vac.vw_AlertasPendientes
-        WHERE (@Ubigeo IS NULL OR Ubigeo = @Ubigeo)
-        ORDER BY CASE TipoAlerta WHEN 'ZONA_BROTE' THEN 0 ELSE 1 END, DiasAbierta DESC, Paciente
-        """,
-        ("@Top", top ?? 100), ("@Ubigeo", ubigeo)))[0]));
-
-regional.MapGet("/pendientes", async (string? ubigeo, string? vacuna, bool? soloBrote, int? top) =>
-    Results.Ok((await db.ExecAsync("vac.usp_ListarPendientes",
-        ("@Ubigeo", ubigeo), ("@CodigoVacuna", vacuna),
-        ("@SoloZonaBrote", soloBrote ?? false), ("@Top", top ?? 100)))[0]));
 
 regional.MapGet("/campanas", async () =>
     Results.Ok((await db.QueryAsync("SELECT * FROM vac.vw_AvanceCampana ORDER BY IdCampana, PorcentajeAvance"))[0]));
