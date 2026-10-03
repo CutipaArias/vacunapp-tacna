@@ -66,7 +66,7 @@ Plan: [plan.md](plan.md) · Spec: [../SPEC.md](../SPEC.md)
 ---
 ## Fase 2 – `registro`
 
-- [ ] **T2.1 Registrar paciente con vacunador/jefe (RF-03, CU03)** (M)
+- [x] **T2.1 Registrar paciente con vacunador/jefe (RF-03, CU03)** (M)
   - Acceptance: `POST /api/pacientes` usa `usp_RegistrarPaciente`; RN-01/02 devuelven mensaje en español (documento duplicado, fecha futura, ubigeo inexistente); formulario en UI.
   - Verify: xUnit (ok, duplicado, fecha futura); casos RN-01/02 en `07_pruebas.sql`
   - Files: `panel/Program.cs`, `panel/Pacientes/PacientesEndpoints.cs`, `panel/wwwroot/pacientes.html`, `tests/…`

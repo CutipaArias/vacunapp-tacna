@@ -121,6 +121,27 @@ function prepararRegistro(doc, pendientes) {
   };
 }
 
+// ---- Alta de pacientes (solo VACUNADOR; el servidor lo vuelve a exigir) ----
+function prepararAltaPaciente() {
+  $('#npac').hidden = false;
+  $('#n-dis').innerHTML = cat.distritos.map(d => `<option value="${esc(d.Ubigeo)}">${esc(d.Nombre)}</option>`).join('');
+  $('#n-nac').max = new Date().toISOString().slice(0, 10);
+  $('#f-npac').onsubmit = async e => {
+    e.preventDefault();
+    const doc = $('#n-doc').value.trim();
+    try {
+      await api('/api/pacientes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+        tipoDocumento: $('#n-tipo').value, numeroDocumento: doc, nombres: $('#n-nom').value, apellidoPaterno: $('#n-pat').value,
+        apellidoMaterno: $('#n-mat').value || null, fechaNacimiento: $('#n-nac').value, sexo: $('#n-sex').value,
+        ubigeo: $('#n-dis').value, direccion: $('#n-dir').value || null, telefono: $('#n-tel').value || null }) });
+      $('#f-npac').reset();
+      $('#n-msg').innerHTML = '<div class="msg ok">Paciente registrado. Se muestra su carné.</div>';
+      $('#p-doc').value = doc;
+      await buscarPaciente();
+    } catch (err) { $('#n-msg').innerHTML = `<div class="msg err">${esc(err.message)}</div>`; }
+  };
+}
+
 // ---- Administración de usuarios (solo ADMINISTRADOR; el servidor lo vuelve a exigir) ----
 let usuarios = [];
 
@@ -212,6 +233,7 @@ async function init() {
   $('#b-cob').onclick = cargarCobertura; $('#b-ale').onclick = cargarAlertas; $('#b-pac').onclick = buscarPaciente;
   $('#p-doc').onkeydown = e => e.key === 'Enter' && buscarPaciente();
   if (tabs.includes('usuarios')) prepararUsuarios();
+  if (yo.rol === 'VACUNADOR') prepararAltaPaciente();
 
   document.querySelector(`nav button[data-tab="${tabs[0]}"]`).click();
   if (tabs[0] === 'resumen') await cargarResumen();

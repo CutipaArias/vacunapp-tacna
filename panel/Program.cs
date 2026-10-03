@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.SqlClient;
 using VacunApp.Panel.Auth;
 using VacunApp.Panel.Data;
+using VacunApp.Panel.Pacientes;
 
 // Interfaz mínima de consulta de VacunApp Tacna.
 // Toda la lógica vive en la base de datos (vistas, procedimientos y triggers);
@@ -73,6 +74,7 @@ app.UseAuthorization();
 
 app.MapAutenticacion();
 app.MapUsuarios();
+app.MapPacientes();
 
 // RN-22: consultas regionales (epidemiólogo y administrador) y consultas clínicas (más jefe y vacunador).
 var regional = app.MapGroup("/api").RequireAuthorization(Politicas.Regional);

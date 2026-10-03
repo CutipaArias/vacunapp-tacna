@@ -80,6 +80,24 @@
       </div>
       <div id="pac"></div>
     </div>
+    <div class="card" id="npac" hidden>
+      <h2>Registrar paciente</h2>
+      <p>Si el paciente aún no tiene carné en el sistema. El documento no puede repetirse y la fecha de nacimiento no puede ser futura.</p>
+      <form class="filters" id="f-npac" autocomplete="off">
+        <label>Documento <select id="n-tipo"><option>DNI</option><option>CNV</option><option>CE</option><option>PAS</option></select></label>
+        <label>Número <input id="n-doc" maxlength="12" required></label>
+        <label>Nombres <input id="n-nom" maxlength="60" required></label>
+        <label>Apellido paterno <input id="n-pat" maxlength="40" required></label>
+        <label>Apellido materno <input id="n-mat" maxlength="40"></label>
+        <label>Nacimiento <input id="n-nac" type="date" required></label>
+        <label>Sexo <select id="n-sex"><option value="F">Femenino</option><option value="M">Masculino</option></select></label>
+        <label>Distrito <select id="n-dis"></select></label>
+        <label>Dirección <input id="n-dir" maxlength="120"></label>
+        <label>Teléfono <input id="n-tel" maxlength="15" inputmode="tel"></label>
+        <button class="b" type="submit">Registrar</button>
+      </form>
+      <div id="n-msg" role="alert"></div>
+    </div>
     <div class="card" id="reg" hidden>
       <h2>Registrar dosis</h2>
       <p>Llama a <code>vac.usp_RegistrarDosis</code>. El trigger de validación rechaza dosis fuera de edad, sin la dosis previa o con lote vencido.</p>
