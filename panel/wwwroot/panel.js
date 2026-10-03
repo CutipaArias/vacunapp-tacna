@@ -25,7 +25,7 @@ const tag = v => `<span class="tag ${esc(v)}">${esc(v)}</span>`;
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
   document.querySelectorAll('nav button, section').forEach(x => x.classList.remove('on'));
   b.classList.add('on'); $('#' + b.dataset.tab).classList.add('on');
-  ({ cobertura: cargarCobertura, alertas: cargarAlertas, campanas: cargarCampanas, stock: cargarStock, horarios: cargarHorarios, usuarios: cargarUsuarios, auditoria: cargarAuditoria })[b.dataset.tab]?.();
+  ({ cobertura: cargarCobertura, alertas: cargarAlertas, campanas: cargarCampanas, citas: cargarCitas, stock: cargarStock, horarios: cargarHorarios, usuarios: cargarUsuarios, auditoria: cargarAuditoria })[b.dataset.tab]?.();
 });
 
 async function cargarResumen() {
@@ -171,6 +171,84 @@ function prepararStock() {
       $('#aj-msg').innerHTML = '<div class="msg ok">Existencia ajustada.</div>';
       await cargarStock();
     } catch (err) { $('#aj-msg').innerHTML = `<div class="msg err">${esc(err.message)}</div>`; }
+  };
+}
+
+// ---- Reservar cita: paciente → dosis → franja → confirmar (ciudadano, vacunador y jefe) ----
+let citaDoc = null, citaPendientes = [];
+const diaHora = s => new Date(s).toLocaleString('es-PE', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+
+async function cargarCitas() {
+  if (yo.rol === 'CIUDADANO') {
+    const hijos = await api('/api/mis-pacientes');
+    $('#c-hijo').innerHTML = hijos.length
+      ? hijos.map(h => `<option value="${esc(h.numeroDocumento)}">${esc(h.nombre)} (${esc(h.parentesco)})</option>`).join('')
+      : '<option value="">Sin hijos vinculados</option>';
+    $('#c-hijos').hidden = false;
+    await elegirPacienteCita($('#c-hijo').value);
+  }
+}
+
+async function elegirPacienteCita(doc) {
+  citaDoc = null; citaPendientes = [];
+  ['#p-dosis', '#p-franja', '#p-confirmar'].forEach(s => $(s).hidden = true);
+  $('#c-msg').innerHTML = ''; $('#c-paciente').textContent = ''; table($('#c-tbl'), [], []);
+  if (!doc) return;
+  try {
+    const p = await api('/api/paciente/' + encodeURIComponent(doc));
+    citaDoc = doc; citaPendientes = p.pendientes;
+    $('#c-paciente').innerHTML = `<b>${esc(p.datos.Paciente)}</b> · ${esc(p.datos.TipoDocumento)} ${esc(p.datos.NumeroDocumento)} · ${p.datos.EdadMeses} meses`;
+    await cargarCitasPaciente();
+    if (!citaPendientes.length) { $('#c-msg').innerHTML = '<div class="msg ok">Este paciente no tiene dosis pendientes.</div>'; return; }
+    $('#c-dosis').innerHTML = citaPendientes.map(x => `<option value="${esc(x.CodigoVacuna)}|${x.NumeroDosis}">${esc(x.CodigoVacuna)} · ${esc(x.Dosis)}</option>`).join('');
+    $('#p-dosis').hidden = false; $('#p-franja').hidden = false;
+    await cargarFranjasCita();
+  } catch (e) { $('#c-msg').innerHTML = `<div class="msg err">${esc(e.message)}</div>`; }
+}
+
+async function cargarCitasPaciente() {
+  const filas = await api('/api/citas?documento=' + encodeURIComponent(citaDoc));
+  $('#t-citas').textContent = `· ${filas.length}`;
+  table($('#c-tbl'), [
+    { h: 'Fecha', f: r => esc(diaHora(r.fechaHora)) }, { h: 'Dosis', f: r => `${esc(r.vacuna)} · ${esc(r.numeroDosis)}` },
+    { h: 'Establecimiento', k: 'establecimiento' },
+    { h: 'Estado', f: r => `<span class="tag ${r.estado === 'PROGRAMADA' ? 'ÓPTIMA' : r.estado === 'ATENDIDA' ? 'BAJO' : 'ACEPTABLE'}">${esc(r.estado)}</span>` }
+  ], filas);
+}
+
+async function cargarFranjasCita() {
+  const vacuna = $('#c-dosis').value.split('|')[0];
+  const q = new URLSearchParams({ vacuna });
+  if (yo.rol === 'CIUDADANO' && $('#c-est').value) q.set('idEstablecimiento', $('#c-est').value);
+  const f = await api('/api/agenda/franjas?' + q);
+  $('#c-franja').innerHTML = f.map(x => `<option value="${x.idHorario}">${esc(diaHora(x.fechaHora))} · ${esc(x.libres)} ${x.libres === 1 ? 'cupo' : 'cupos'}${yo.rol === 'CIUDADANO' ? ' · ' + esc(x.establecimiento) : ''}</option>`).join('');
+  $('#c-sinfranjas').hidden = f.length > 0;
+  $('#p-confirmar').hidden = f.length === 0;
+}
+
+function prepararCitas() {
+  $('#c-est').innerHTML = '<option value="">Todos</option>' + cat.establecimientos.map(e => `<option value="${e.IdEstablecimiento}">${esc(e.Nombre)} (${esc(e.Distrito)})</option>`).join('');
+  $('#c-lest').hidden = yo.rol !== 'CIUDADANO';
+  $('#c-buscar').hidden = yo.rol === 'CIUDADANO';
+  const buscar = () => elegirPacienteCita($('#c-doc').value.trim());
+  $('#b-c-buscar').onclick = buscar;
+  $('#c-doc').onkeydown = e => e.key === 'Enter' && buscar();
+  $('#c-hijo').onchange = () => elegirPacienteCita($('#c-hijo').value);
+  const recargar = () => cargarFranjasCita().catch(e => $('#c-msg').innerHTML = `<div class="msg err">${esc(e.message)}</div>`);
+  $('#c-dosis').onchange = recargar; $('#c-est').onchange = recargar;
+  $('#b-c-reservar').onclick = async () => {
+    const [vacuna, dosis] = $('#c-dosis').value.split('|');
+    const b = $('#b-c-reservar'); b.disabled = true;
+    try {
+      await api('/api/citas', json({ documento: citaDoc, vacuna, dosis: +dosis, idHorario: +$('#c-franja').value }));
+      $('#c-msg').innerHTML = '<div class="msg ok">Cita reservada. Llegue 10 minutos antes con el DNI del paciente.</div>';
+      await elegirPacienteCita(citaDoc);
+      $('#c-msg').innerHTML = '<div class="msg ok">Cita reservada. Llegue 10 minutos antes con el DNI del paciente.</div>';
+    } catch (e) {
+      // Si la franja se llenó mientras elegía, se muestra el motivo y se refresca la lista de franjas.
+      $('#c-msg').innerHTML = `<div class="msg err">${esc(e.message)}</div>`;
+      recargar();
+    } finally { b.disabled = false; }
   };
 }
 
@@ -370,6 +448,7 @@ async function init() {
     .map(e => `<option value="${e.IdEstablecimiento}">${esc(e.Nombre)} (${esc(e.Distrito)})</option>`).join('');
   $('#b-cob').onclick = cargarCobertura; $('#b-ale').onclick = cargarAlertas; $('#b-pac').onclick = buscarPaciente;
   $('#p-doc').onkeydown = e => e.key === 'Enter' && buscarPaciente();
+  if (tabs.includes('citas')) prepararCitas();
   if (tabs.includes('stock')) prepararStock();
   if (tabs.includes('horarios')) prepararHorarios();
   if (tabs.includes('usuarios')) prepararUsuarios();

@@ -24,6 +24,8 @@ static class Politicas
     public const string Jefe = nameof(Jefe);
     public const string Administrador = nameof(Administrador);
     public const string Ciudadano = nameof(Ciudadano);
+    /// <summary>Quien reserva citas: el ciudadano para sus hijos y el personal del establecimiento (vacunador y jefe).</summary>
+    public const string Reserva = nameof(Reserva);
 
     public static void Configurar(AuthorizationOptions o)
     {
@@ -35,6 +37,7 @@ static class Politicas
         o.AddPolicy(Jefe, p => p.RequireRole(Roles.Jefe));
         o.AddPolicy(Administrador, p => p.RequireRole(Roles.Administrador));
         o.AddPolicy(Ciudadano, p => p.RequireRole(Roles.Ciudadano));
+        o.AddPolicy(Reserva, p => p.RequireRole(Roles.Ciudadano, Roles.Vacunador, Roles.Jefe));
     }
 }
 

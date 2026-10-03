@@ -39,10 +39,10 @@ static class CarneEndpoints
         }).RequireAuthorization(Politicas.Ciudadano);
     }
 
-    static int IdUsuario(ClaimsPrincipal user) =>
+    internal static int IdUsuario(ClaimsPrincipal user) =>
         int.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : 0;
 
-    static async Task<bool> EsHijoAsync(Db db, ClaimsPrincipal user, string documento)
+    internal static async Task<bool> EsHijoAsync(Db db, ClaimsPrincipal user, string documento)
     {
         var r = await db.QueryAsync(
             """

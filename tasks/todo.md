@@ -138,7 +138,7 @@ Plan: [plan.md](plan.md) · Spec: [../SPEC.md](../SPEC.md)
   - Files: `database/10_agenda.sql`, `tests/concurrencia.ps1`, `database/07_pruebas.sql`
   - Deps: T4.1
 
-- [ ] **T4.3 Reservar desde la UI (celular)** (M) — RNF-06
+- [x] **T4.3 Reservar desde la UI (celular)** (M) — RNF-06
   - Acceptance: flujo ≤ 4 pasos (paciente → dosis → establecimiento/franja → confirmar); muestra cupos disponibles; mensaje claro si la franja se llenó; usable a 360 px.
   - Verify: manual con `resize_window` mobile + xUnit del endpoint
   - Files: `panel/Agenda/CitasEndpoints.cs`, `panel/wwwroot/reservar.html`, `panel/wwwroot/app.js`, `tests/…`

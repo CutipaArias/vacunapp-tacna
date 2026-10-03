@@ -23,6 +23,7 @@
   <button data-tab="alertas" data-roles="ADMINISTRADOR EPIDEMIOLOGO" hidden>Alertas</button>
   <button data-tab="campanas" data-roles="ADMINISTRADOR EPIDEMIOLOGO" hidden>Campañas</button>
   <button data-tab="paciente" data-roles="ADMINISTRADOR EPIDEMIOLOGO JEFE_ESTABLECIMIENTO VACUNADOR CIUDADANO" hidden>Paciente</button>
+  <button data-tab="citas" data-roles="CIUDADANO VACUNADOR JEFE_ESTABLECIMIENTO" hidden>Citas</button>
   <button data-tab="stock" data-roles="JEFE_ESTABLECIMIENTO" hidden>Stock</button>
   <button data-tab="horarios" data-roles="JEFE_ESTABLECIMIENTO" hidden>Horarios</button>
   <button data-tab="usuarios" data-roles="ADMINISTRADOR" hidden>Usuarios</button>
@@ -126,6 +127,43 @@
         <button class="b" id="b-aud">Consultar</button>
       </div>
       <div class="tbl"><table id="aud"></table></div>
+    </div>
+  </section>
+
+  <section id="citas">
+    <div class="card">
+      <h2>Reservar cita</h2>
+      <p>Cuatro pasos: paciente, dosis, franja y confirmación.</p>
+      <div class="paso">
+        <h3>1. Paciente</h3>
+        <div id="c-hijos" class="filters" hidden>
+          <label>Hijo o hija <select id="c-hijo"></select></label>
+        </div>
+        <div id="c-buscar" class="filters" hidden>
+          <label>DNI <input id="c-doc" inputmode="numeric" maxlength="12" placeholder="70000001"></label>
+          <button class="b" id="b-c-buscar" type="button">Buscar</button>
+        </div>
+        <div id="c-paciente" class="muted"></div>
+      </div>
+      <div class="paso" id="p-dosis" hidden>
+        <h3>2. Dosis</h3>
+        <label>Dosis pendiente <select id="c-dosis"></select></label>
+      </div>
+      <div class="paso" id="p-franja" hidden>
+        <h3>3. Establecimiento y franja</h3>
+        <label id="c-lest">Establecimiento <select id="c-est"></select></label>
+        <label>Franja disponible <select id="c-franja"></select></label>
+        <div id="c-sinfranjas" class="muted" hidden>No hay franjas con cupo para esta dosis. Pruebe con otro establecimiento o más adelante.</div>
+      </div>
+      <div class="paso" id="p-confirmar" hidden>
+        <h3>4. Confirmar</h3>
+        <button class="b" id="b-c-reservar" type="button">Reservar cita</button>
+      </div>
+      <div id="c-msg" role="alert"></div>
+    </div>
+    <div class="card">
+      <h2>Citas del paciente <span class="time" id="t-citas"></span></h2>
+      <div class="tbl"><table id="c-tbl"></table></div>
     </div>
   </section>
 
