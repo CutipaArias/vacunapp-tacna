@@ -1288,6 +1288,52 @@ END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
 IF @@TRANCOUNT > 0 ROLLBACK;
 INSERT @R VALUES ('usp_DeclararBrote', 'RN-19: tras cerrar se puede declarar uno nuevo', 'OK', @Err);
 
+/* =================== Vigilancia: alertas (RF-11; CU11) =================== */
+
+/* H48. Atender una alerta con un estado inválido */
+BEGIN TRANSACTION;
+EXEC vac.usp_RegistrarPaciente 'DNI', '89060001', 'Prueba', 'Uno', NULL, @Nac20m, 'M', '230104', NULL, NULL, @IdPac OUTPUT;
+DECLARE @IdAl BIGINT = (SELECT TOP (1) IdAlerta FROM vac.Alerta WHERE IdPaciente = @IdPac AND Estado = 'PENDIENTE');
+BEGIN TRY
+    EXEC vac.usp_AtenderAlerta @IdAl, 'BORRADA';
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_AtenderAlerta', 'Rechaza un estado que no es ATENDIDA ni DESCARTADA', '50040', @Err);
+
+/* H49. Una alerta ya cerrada no se cierra otra vez; una inexistente tampoco */
+BEGIN TRANSACTION;
+EXEC vac.usp_RegistrarPaciente 'DNI', '89060001', 'Prueba', 'Uno', NULL, @Nac20m, 'M', '230104', NULL, NULL, @IdPac OUTPUT;
+SET @IdAl = (SELECT TOP (1) IdAlerta FROM vac.Alerta WHERE IdPaciente = @IdPac AND Estado = 'PENDIENTE');
+EXEC vac.usp_AtenderAlerta @IdAl, 'ATENDIDA';
+BEGIN TRY
+    EXEC vac.usp_AtenderAlerta @IdAl, 'DESCARTADA';
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+BEGIN TRY
+    EXEC vac.usp_AtenderAlerta -1, 'DESCARTADA';
+    SET @Err = CONCAT(@Err, '/sin error');
+END TRY BEGIN CATCH SET @Err = CONCAT(@Err, '/', ERROR_NUMBER()); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_AtenderAlerta', 'Rechaza cerrar dos veces o una alerta inexistente', '50041/50041', @Err);
+
+/* H50. La alerta de inasistencia aparece en la vista de alertas pendientes con el detalle del paciente */
+BEGIN TRANSACTION;
+EXEC vac.usp_RegistrarPaciente 'DNI', '89060001', 'Prueba', 'Uno', NULL, @Nac20m, 'M', '230104', NULL, NULL, @IdPac OUTPUT;
+UPDATE vac.Alerta SET Estado = 'DESCARTADA', FechaAtencion = SYSDATETIME() WHERE IdPaciente = @IdPac AND Estado = 'PENDIENTE';  -- el alta ya trae alerta por el brote del distrito
+INSERT vac.Alerta (IdPaciente, IdEsquema, TipoAlerta) VALUES (@IdPac, @IdSPR1, 'INASISTENCIA');
+SET @Err = (SELECT CONCAT(TipoAlerta, '/', NumeroDocumento, '/', CodigoVacuna, '/', Ubigeo) FROM vac.vw_AlertasPendientes WHERE NumeroDocumento = '89060001' AND TipoAlerta = 'INASISTENCIA');
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('vw_AlertasPendientes', 'Incluye las alertas de inasistencia con el detalle del paciente', 'INASISTENCIA/89060001/SPR/230104', ISNULL(@Err, 'no aparece'));
+
+/* H51. Las alertas de stock no aparecen entre las alertas de pacientes */
+BEGIN TRANSACTION;
+UPDATE vac.StockLote SET Cantidad = 0 WHERE IdStock = (SELECT TOP (1) IdStock FROM vac.StockLote WHERE IdEstablecimiento = @Est AND Cantidad > 0 ORDER BY IdStock);
+SET @n = (SELECT COUNT(*) FROM vac.Alerta WHERE TipoAlerta = 'STOCK_BAJO' AND Estado = 'PENDIENTE' AND IdStock = (SELECT TOP (1) IdStock FROM vac.StockLote WHERE IdEstablecimiento = @Est AND Cantidad = 0 ORDER BY IdStock));
+SET @Err = CONCAT(@n, '/', (SELECT COUNT(*) FROM vac.vw_AlertasPendientes WHERE TipoAlerta IN ('STOCK_BAJO','LOTE_POR_VENCER')));
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('vw_AlertasPendientes', 'Las alertas de stock quedan fuera de la vista de pacientes', '1/0', @Err);
+
 /* H47. RNF-01: listar los pendientes de las zonas de brote tarda menos de 2 s con 20 000 pacientes */
 CREATE TABLE #lp (NumeroDocumento VARCHAR(20), Paciente NVARCHAR(200), EdadMeses INT, Telefono VARCHAR(20), Distrito NVARCHAR(100),
                   CodigoVacuna VARCHAR(10), NumeroDosis INT, Dosis NVARCHAR(100), MesesAtraso INT);
