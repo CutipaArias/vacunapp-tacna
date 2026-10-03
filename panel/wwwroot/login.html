@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Iniciar sesión · VacunApp Tacna</title>
+<link rel="stylesheet" href="/estilos.css">
+</head>
+<body class="login">
+<main class="login-caja">
+  <h1>VacunApp Tacna</h1>
+  <p class="muted">Inicie sesión para continuar. <span>Datos simulados.</span></p>
+  <form id="f-login" class="card" autocomplete="on" novalidate>
+    <label>Usuario
+      <input id="l-usuario" name="usuario" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="30" required autofocus>
+    </label>
+    <label>Contraseña
+      <input id="l-clave" name="clave" type="password" autocomplete="current-password" maxlength="128" required>
+    </label>
+    <div id="l-msg" role="alert" aria-live="assertive"></div>
+    <button class="b" id="l-entrar" type="submit">Ingresar</button>
+  </form>
+</main>
+<script src="/login.js"></script>
+</body>
+</html>

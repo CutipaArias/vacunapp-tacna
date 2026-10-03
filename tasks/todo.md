@@ -42,7 +42,7 @@ Plan: [plan.md](plan.md) · Spec: [../SPEC.md](../SPEC.md)
   - Files: `panel/Auth/Politicas.cs`, `panel/Auth/Alcance.cs`, `panel/Program.cs`, `tests/…/AutorizacionTests.cs`
   - Deps: T1.2
 
-- [ ] **T1.4 Pantalla de login y menú por rol** (M) — RNF-06
+- [x] **T1.4 Pantalla de login y menú por rol** (M) — RNF-06
   - Acceptance: `login.html` usable en 360 px; tras login se muestra menú solo con opciones del rol; la página de consulta actual pasa a requerir sesión; errores en español.
   - Verify: manual en navegador con los 5 usuarios (captura de cada menú) + `read_console_messages` sin errores
   - Files: `panel/wwwroot/login.html`, `panel/wwwroot/app.js`, `panel/wwwroot/index.html`, `panel/wwwroot/estilos.css`

@@ -35,7 +35,7 @@ static class AuthEndpoints
                         : null;
                     if (vigente is null || !vigente.Activo
                         || vigente.Rol != ctx.Principal!.FindFirstValue(ClaimTypes.Role)
-                        || vigente.IdEstablecimiento?.ToString() != ctx.Principal.FindFirstValue(ClaimEstablecimiento))
+                        || vigente.IdEstablecimiento?.ToString() != ctx.Principal!.FindFirstValue(ClaimEstablecimiento))
                     {
                         ctx.RejectPrincipal();
                         await ctx.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
