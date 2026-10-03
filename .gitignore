@@ -1,0 +1,12 @@
+bin/
+obj/
+*.user
+.vs/
+
+# Secretos y configuracion local (copiar *.example.json y completar)
+panel/appsettings.Development.json
+panel/appsettings.Production.json
+.env
+*.env
+*.pfx
+*.publishsettings

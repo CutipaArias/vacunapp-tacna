@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VacunApp Tacna</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --ink: #1c2430; --muted: #5b6675; --line: #e3e7ec;
+    --accent: #0f6cbd; --ok: #1a7f37; --warn: #b26b00; --bad: #c62828;
+    --ok-bg: #e6f4ea; --warn-bg: #fff4e0; --bad-bg: #fdecec; --bar: #dfe6ee;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #11151b; --panel: #1a2029; --ink: #e6ebf1; --muted: #9aa6b4; --line: #2b3440;
+      --accent: #4ea1f3; --ok: #4cc26b; --warn: #f0a93b; --bad: #ff6b6b;
+      --ok-bg: #173323; --warn-bg: #3a2c12; --bad-bg: #3d1a1a; --bar: #2b3440;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.45 "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--ink); }
+  header { padding: 18px 24px 0; }
+  header h1 { margin: 0; font-size: 20px; }
+  header p { margin: 2px 0 0; color: var(--muted); }
+  nav { display: flex; gap: 4px; padding: 14px 24px 0; border-bottom: 1px solid var(--line); overflow-x: auto; }
+  nav button { border: 0; background: none; color: var(--muted); padding: 8px 14px; font: inherit; cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; }
+  nav button.on { color: var(--accent); border-color: var(--accent); font-weight: 600; }
+  main { padding: 20px 24px 40px; max-width: 1200px; }
+  section { display: none; } section.on { display: block; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; }
+  .kpi b { display: block; font-size: 24px; font-variant-numeric: tabular-nums; }
+  .kpi span { color: var(--muted); font-size: 12px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+  .card h2 { margin: 0 0 4px; font-size: 15px; } .card > p { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
+  .tbl { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; }
+  td.n, th.n { text-align: right; }
+  .bar { position: relative; width: 140px; height: 8px; background: var(--bar); border-radius: 4px; display: inline-block; vertical-align: middle; margin-right: 8px; }
+  .bar i { position: absolute; inset: 0 auto 0 0; border-radius: 4px; background: var(--accent); }
+  .bar em { position: absolute; top: -3px; bottom: -3px; left: 95%; width: 2px; background: var(--ink); opacity: .5; }
+  .tag { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; }
+  .ALTO, .CRÍTICA, .ZONA_BROTE { background: var(--bad-bg); color: var(--bad); }
+  .MEDIO, .ACEPTABLE, .DOSIS_ATRASADA { background: var(--warn-bg); color: var(--warn); }
+  .BAJO, .ÓPTIMA { background: var(--ok-bg); color: var(--ok); }
+  .filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; margin-bottom: 12px; }
+  label { display: grid; gap: 3px; font-size: 12px; color: var(--muted); }
+  select, input, button.b { font: inherit; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); }
+  button.b { background: var(--accent); color: #fff; border-color: var(--accent); cursor: pointer; }
+  .msg { padding: 8px 12px; border-radius: 6px; margin: 8px 0; }
+  .msg.err { background: var(--bad-bg); color: var(--bad); } .msg.ok { background: var(--ok-bg); color: var(--ok); }
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+  .muted { color: var(--muted); } .time { color: var(--muted); font-size: 12px; margin-left: 6px; }
+  @media (max-width: 600px) { header, nav, main { padding-left: 16px; padding-right: 16px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>VacunApp Tacna</h1>
+  <p>Registro y control de vacunación · Respuesta al brote de sarampión · <span class="muted">Datos simulados</span></p>
+</header>
+<nav>
+  <button data-tab="resumen" class="on">Resumen</button>
+  <button data-tab="cobertura">Cobertura por distrito</button>
+  <button data-tab="alertas">Alertas</button>
+  <button data-tab="campanas">Campañas</button>
+  <button data-tab="paciente">Paciente</button>
+</nav>
+<main>
+  <section id="resumen" class="on">
+    <div class="kpis" id="kpis"></div>
+    <div class="card">
+      <h2>Cobertura contra el sarampión (SPR) por distrito <span class="time" id="t-sar"></span></h2>
+      <p>Porcentaje de niños elegibles con cada dosis. La línea marca la meta del 95 %. Riesgo ALTO: brote activo o SPR1 &lt; 80 %.</p>
+      <div class="tbl"><table id="sar"></table></div>
+    </div>
+  </section>
+
+  <section id="cobertura">
+    <div class="card">
+      <h2>Reporte de cobertura <span class="time" id="t-cob"></span></h2>
+      <p>Ejecuta <code>vac.usp_ReporteCoberturaDistrito</code>, ordenado de menor a mayor cobertura para priorizar campañas.</p>
+      <div class="filters">
+        <label>Vacuna <select id="f-vac"><option value="">Todas</option></select></label>
+        <label>Dosis <select id="f-dos"><option value="">Todas</option><option>1</option><option>2</option><option>3</option></select></label>
+        <label>Provincia <select id="f-prov"><option value="">Todas</option><option>Tacna</option><option>Candarave</option><option>Jorge Basadre</option><option>Tarata</option></select></label>
+        <button class="b" id="b-cob">Consultar</button>
+      </div>
+      <div class="tbl"><table id="cob"></table></div>
+    </div>
+  </section>
+
+  <section id="alertas">
+    <div class="card">
+      <h2>Alertas pendientes <span class="time" id="t-ale"></span></h2>
+      <p>Generadas por los triggers al declarar un brote o registrar a un paciente en zona de brote, y por el proceso de dosis atrasadas.</p>
+      <div class="filters">
+        <label>Distrito <select id="a-dis"><option value="">Todos</option></select></label>
+        <button class="b" id="b-ale">Consultar</button>
+      </div>
+      <div class="tbl"><table id="ale"></table></div>
+    </div>
+  </section>
+
+  <section id="campanas">
+    <div class="card">
+      <h2>Avance de campañas por distrito</h2>
+      <p>Dosis aplicadas dentro de cada campaña frente a la meta planificada.</p>
+      <div class="tbl"><table id="cam"></table></div>
+    </div>
+  </section>
+
+  <section id="paciente">
+    <div class="card">
+      <h2>Carné de vacunación</h2>
+      <div class="filters">
+        <label>DNI <input id="p-doc" placeholder="70000001" maxlength="12"></label>
+        <button class="b" id="b-pac">Buscar</button>
+      </div>
+      <div id="pac"></div>
+    </div>
+    <div class="card" id="reg" hidden>
+      <h2>Registrar dosis</h2>
+      <p>Llama a <code>vac.usp_RegistrarDosis</code>. El trigger de validación rechaza dosis fuera de edad, sin la dosis previa o con lote vencido.</p>
+      <div class="filters">
+        <label>Dosis pendiente <select id="r-dosis"></select></label>
+        <label>Lote <select id="r-lote"></select></label>
+        <label>Establecimiento <select id="r-est"></select></label>
+        <label>Vacunador <select id="r-per"></select></label>
+        <label>Fecha <input type="date" id="r-fec"></label>
+        <button class="b" id="b-reg">Registrar</button>
+      </div>
+      <div id="r-msg"></div>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const fmt = n => n == null ? '—' : Number(n).toLocaleString('es-PE');
+const pct = n => n == null ? '—' : Number(n).toFixed(1) + ' %';
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fecha = s => s ? String(s).slice(0, 10) : '—';
+let cat;
+
+async function api(url, opts) {
+  const t0 = performance.now();
+  const r = await fetch(url, opts);
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(body.error || r.statusText);
+  body.__ms = Math.round(performance.now() - t0);
+  return body;
+}
+function table(el, cols, rows) {
+  el.innerHTML = '<thead><tr>' + cols.map(c => `<th class="${c.n ? 'n' : ''}">${c.h}</th>`).join('') + '</tr></thead><tbody>' +
+    (rows.length ? rows.map(r => '<tr>' + cols.map(c => `<td class="${c.n ? 'n' : ''}">${c.f ? c.f(r) : esc(r[c.k])}</td>`).join('') + '</tr>').join('')
+                 : `<tr><td colspan="${cols.length}" class="muted">Sin resultados</td></tr>`) + '</tbody>';
+}
+const bar = v => `<span class="bar"><i style="width:${Math.min(v ?? 0, 100)}%"></i><em></em></span>${pct(v)}`;
+const tag = v => `<span class="tag ${esc(v)}">${esc(v)}</span>`;
+
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('nav button, section').forEach(x => x.classList.remove('on'));
+  b.classList.add('on'); $('#' + b.dataset.tab).classList.add('on');
+  ({ cobertura: cargarCobertura, alertas: cargarAlertas, campanas: cargarCampanas })[b.dataset.tab]?.();
+});
+
+async function cargarResumen() {
+  const k = await api('/api/resumen');
+  $('#kpis').innerHTML = [
+    ['Pacientes registrados', fmt(k.TotalPacientes)], ['Dosis aplicadas', fmt(k.TotalDosis)],
+    ['Cobertura SPR1 regional', pct(k.CoberturaRegionalSPR1)], ['Cobertura SPR2 regional', pct(k.CoberturaRegionalSPR2)],
+    ['Brotes activos', `${fmt(k.BrotesActivos)} <small class="muted">(${fmt(k.CasosActivos)} casos)</small>`],
+    ['Alertas pendientes', fmt(k.AlertasPendientes)]
+  ].map(([t, v]) => `<div class="kpi"><span>${t}</span><b>${v}</b></div>`).join('');
+  const s = await api('/api/sarampion');
+  $('#t-sar').textContent = `· ${s.__ms} ms`;
+  table($('#sar'), [
+    { h: 'Distrito', f: r => esc(r.Distrito) + (r.BroteActivo ? ` <span class="tag ALTO">brote · ${r.CasosConfirmados} casos</span>` : '') },
+    { h: 'Provincia', k: 'Provincia' },
+    { h: 'Elegibles', k: 'ElegiblesSPR1', n: 1, f: r => fmt(r.ElegiblesSPR1) },
+    { h: 'SPR 1.a dosis', f: r => bar(r.CoberturaSPR1) },
+    { h: 'SPR 2.a dosis', f: r => bar(r.CoberturaSPR2) },
+    { h: 'Riesgo', f: r => tag(r.NivelRiesgo) }
+  ], s);
+}
+
+async function cargarCobertura() {
+  const q = new URLSearchParams({ vacuna: $('#f-vac').value, dosis: $('#f-dos').value, provincia: $('#f-prov').value });
+  const r = await api('/api/cobertura?' + q);
+  $('#t-cob').textContent = `· ${r.length} filas · ${r.__ms} ms`;
+  table($('#cob'), [
+    { h: 'Distrito', k: 'Distrito' }, { h: 'Vacuna', k: 'CodigoVacuna' }, { h: 'Dosis', k: 'Dosis' },
+    { h: 'Elegibles', n: 1, f: r => fmt(r.Elegibles) }, { h: 'Vacunados', n: 1, f: r => fmt(r.Vacunados) },
+    { h: 'Sin vacunar', n: 1, f: r => fmt(r.SinVacunar) },
+    { h: 'Cobertura', f: r => bar(r.PorcentajeCobertura) }, { h: 'Clasificación', f: r => tag(r.Clasificacion) }
+  ], r);
+}
+
+async function cargarAlertas() {
+  const r = await api('/api/alertas?' + new URLSearchParams({ ubigeo: $('#a-dis').value, top: 200 }));
+  $('#t-ale').textContent = `· primeras ${r.length} · ${r.__ms} ms`;
+  table($('#ale'), [
+    { h: 'Tipo', f: r => tag(r.TipoAlerta) }, { h: 'DNI', k: 'NumeroDocumento' }, { h: 'Paciente', k: 'Paciente' },
+    { h: 'Edad (m)', n: 1, k: 'EdadMeses' }, { h: 'Distrito', k: 'Distrito' },
+    { h: 'Dosis', f: r => `${esc(r.CodigoVacuna)} · ${esc(r.Dosis)}` }, { h: 'Teléfono', k: 'Telefono' },
+    { h: 'Días abierta', n: 1, k: 'DiasAbierta' }
+  ], r);
+}
+
+async function cargarCampanas() {
+  const r = await api('/api/campanas');
+  table($('#cam'), [
+    { h: 'Campaña', k: 'Campana' }, { h: 'Periodo', f: r => `${fecha(r.FechaInicio)} → ${fecha(r.FechaFin)}` },
+    { h: 'Distrito', k: 'Distrito' }, { h: 'Meta', n: 1, f: r => fmt(r.MetaDosis) },
+    { h: 'Aplicadas', n: 1, f: r => fmt(r.DosisAplicadas) }, { h: 'Avance', f: r => bar(r.PorcentajeAvance) }
+  ], r);
+}
+
+async function buscarPaciente() {
+  const doc = $('#p-doc').value.trim();
+  if (!doc) return;
+  $('#reg').hidden = true;
+  try {
+    const p = await api('/api/paciente/' + encodeURIComponent(doc));
+    const d = p.datos;
+    $('#pac').innerHTML = `<p><b>${esc(d.Paciente)}</b> · ${esc(d.TipoDocumento)} ${esc(d.NumeroDocumento)} · ${d.EdadMeses} meses ·
+      ${esc(d.Distrito)} · ${esc(d.Direccion)} · ${esc(d.Telefono)}</p><div class="grid2"><div class="tbl"><table id="p-apl"></table></div><div class="tbl"><table id="p-pen"></table></div></div>`;
+    table($('#p-apl'), [{ h: 'Aplicada', f: r => `${esc(r.CodigoVacuna)} · ${esc(r.Dosis)}` }, { h: 'Fecha', f: r => fecha(r.FechaAplicacion) },
+      { h: 'Lote', k: 'NumeroLote' }, { h: 'Establecimiento', k: 'Establecimiento' }], p.aplicadas);
+    table($('#p-pen'), [{ h: 'Pendiente', f: r => `${esc(r.CodigoVacuna)} · ${esc(r.Dosis)}` }, { h: 'Meses de atraso', n: 1, k: 'MesesAtraso' }], p.pendientes);
+    prepararRegistro(doc, p.pendientes);
+  } catch (e) { $('#pac').innerHTML = `<div class="msg err">${esc(e.message)}</div>`; }
+}
+
+function prepararRegistro(doc, pendientes) {
+  if (!pendientes.length) return;
+  $('#reg').hidden = false; $('#r-msg').innerHTML = '';
+  $('#r-dosis').innerHTML = pendientes.map(p => `<option value="${esc(p.CodigoVacuna)}|${p.NumeroDosis}">${esc(p.CodigoVacuna)} · ${esc(p.Dosis)}</option>`).join('');
+  const lotes = () => {
+    const v = $('#r-dosis').value.split('|')[0];
+    $('#r-lote').innerHTML = cat.lotes.filter(l => l.Codigo === v).map(l => `<option>${esc(l.NumeroLote)}</option>`).join('');
+  };
+  const personal = () => {
+    $('#r-per').innerHTML = cat.personal.filter(p => p.IdEstablecimiento == $('#r-est').value).map(p => `<option value="${p.Dni}">${esc(p.Nombre)}</option>`).join('');
+  };
+  $('#r-dosis').onchange = lotes; $('#r-est').onchange = personal; lotes(); personal();
+  $('#r-fec').value = new Date().toISOString().slice(0, 10);
+  $('#b-reg').onclick = async () => {
+    const [vacuna, dosis] = $('#r-dosis').value.split('|');
+    try {
+      const r = await api('/api/dosis', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+        documento: doc, vacuna, dosis: +dosis, lote: $('#r-lote').value, idEstablecimiento: +$('#r-est').value,
+        dniPersonal: $('#r-per').value, fecha: $('#r-fec').value || null }) });
+      await buscarPaciente();
+      $('#r-msg').innerHTML = `<div class="msg ok">Dosis registrada (Id ${r.idDosis}). Las alertas asociadas se cerraron automáticamente.</div>`;
+    } catch (e) { $('#r-msg').innerHTML = `<div class="msg err">${esc(e.message)}</div>`; }
+  };
+}
+
+async function init() {
+  cat = await api('/api/catalogos');
+  $('#f-vac').innerHTML += [...new Set(cat.esquema.map(e => e.Codigo))].map(c => `<option>${c}</option>`).join('');
+  $('#a-dis').innerHTML += cat.distritos.map(d => `<option value="${d.Ubigeo}">${esc(d.Nombre)}</option>`).join('');
+  $('#r-est').innerHTML = cat.establecimientos.map(e => `<option value="${e.IdEstablecimiento}">${esc(e.Nombre)} (${esc(e.Distrito)})</option>`).join('');
+  $('#b-cob').onclick = cargarCobertura; $('#b-ale').onclick = cargarAlertas; $('#b-pac').onclick = buscarPaciente;
+  $('#p-doc').onkeydown = e => e.key === 'Enter' && buscarPaciente();
+  await cargarResumen();
+}
+init().catch(e => $('#kpis').innerHTML = `<div class="msg err">No se pudo conectar con la base de datos: ${esc(e.message)}</div>`);
+</script>
+</body>
+</html>
