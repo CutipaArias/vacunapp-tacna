@@ -703,6 +703,241 @@ END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
 IF @@TRANCOUNT > 0 ROLLBACK;
 INSERT @R VALUES ('usp_AjustarStock', 'Rechaza un ajuste sin diferencia', '50116', @Err);
 
+/* =================== Agenda: franjas y citas (RF-05, RF-08; RN-14, RN-15, RN-17) =================== */
+DECLARE @IdHor INT, @IdHor2 INT, @IdCita INT, @IdPacB INT, @IdSPR2 SMALLINT, @IdUsuCiud INT, @IdUsuCiud2 INT;
+DECLARE @Franja DATETIME2(0) = DATEADD(HOUR, 9, CAST(DATEADD(DAY, 3, @Hoy) AS DATETIME2(0)));
+DECLARE @Franja2 DATETIME2(0) = DATEADD(HOUR, 1, @Franja);
+SELECT @IdSPR2 = e.IdEsquema FROM vac.EsquemaDosis e JOIN vac.Vacuna v ON v.IdVacuna = e.IdVacuna WHERE v.Codigo = 'SPR' AND e.NumeroDosis = 2;
+SELECT @IdUsuCiud = IdUsuario FROM vac.Usuario WHERE NombreUsuario = 'ciud01';
+
+/* H1. Crear una franja */
+BEGIN TRANSACTION;
+BEGIN TRY
+    EXEC vac.usp_CrearHorario @Est, 'SPR', @Franja, 5, @IdHor OUTPUT;
+    SET @Err = CONCAT((SELECT COUNT(*) FROM vac.HorarioAtencion WHERE IdHorario = @IdHor), '/',
+                      (SELECT CupoMaximo FROM vac.HorarioAtencion WHERE IdHorario = @IdHor));
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_CrearHorario', 'Crea una franja con su cupo', '1/5', @Err);
+
+/* H2. Franja duplicada (mismo establecimiento, vacuna y hora) */
+BEGIN TRANSACTION;
+EXEC vac.usp_CrearHorario @Est, 'SPR', @Franja, 5, @IdHor OUTPUT;
+BEGIN TRY
+    EXEC vac.usp_CrearHorario @Est, 'SPR', @Franja, 3, @IdHor2 OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_CrearHorario', 'Rechaza una franja duplicada', '50130', @Err);
+
+/* H3. Franja en el pasado */
+BEGIN TRANSACTION;
+BEGIN TRY
+    EXEC vac.usp_CrearHorario @Est, 'SPR', '2020-01-01 09:00', 5, @IdHor OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_CrearHorario', 'Rechaza una franja en el pasado', '50131', @Err);
+
+/* H4. Cupo fuera de rango */
+BEGIN TRANSACTION;
+BEGIN TRY
+    EXEC vac.usp_CrearHorario @Est, 'SPR', @Franja, 0, @IdHor OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_CrearHorario', 'Rechaza un cupo menor que 1', '50132', @Err);
+
+/* H5. Reserva válida: queda PROGRAMADA */
+BEGIN TRANSACTION;
+EXEC vac.usp_RegistrarPaciente 'DNI', '89050001', 'Prueba', 'Cita', NULL, @Nac20m, 'M', '230104', NULL, NULL, @IdPac OUTPUT;
+EXEC vac.usp_CrearHorario @Est, 'SPR', @Franja, 5, @IdHor OUTPUT;
+BEGIN TRY
+    EXEC vac.usp_ReservarCita @IdPac, @IdHor, @IdSPR1, NULL, @IdCita OUTPUT;
+    SET @Err = (SELECT Estado FROM vac.Cita WHERE IdCita = @IdCita);
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_ReservarCita', 'Reserva una dosis elegible', 'PROGRAMADA', @Err);
+
+/* H6. RN-14: sin cupo en la franja */
+BEGIN TRANSACTION;
+EXEC vac.usp_RegistrarPaciente 'DNI', '89050001', 'Prueba', 'Uno', NULL, @Nac20m, 'M', '230104', NULL, NULL, @IdPac OUTPUT;
+EXEC vac.usp_RegistrarPaciente 'DNI', '89050002', 'Prueba', 'Dos', NULL, @Nac20m, 'F', '230104', NULL, NULL, @IdPacB OUTPUT;
+EXEC vac.usp_CrearHorario @Est, 'SPR', @Franja, 1, @IdHor OUTPUT;
+EXEC vac.usp_ReservarCita @IdPac, @IdHor, @IdSPR1, NULL, @IdCita OUTPUT;
+BEGIN TRY
+    EXEC vac.usp_ReservarCita @IdPacB, @IdHor, @IdSPR1, NULL, @IdCita OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_ReservarCita', 'RN-14: rechaza la reserva sobre el cupo', '50126', @Err);
+
+/* H7. RN-15: dos citas activas para la misma dosis */
+BEGIN TRANSACTION;
+EXEC vac.usp_RegistrarPaciente 'DNI', '89050001', 'Prueba', 'Uno', NULL, @Nac20m, 'M', '230104', NULL, NULL, @IdPac OUTPUT;
+EXEC vac.usp_CrearHorario @Est, 'SPR', @Franja, 5, @IdHor OUTPUT;
+EXEC vac.usp_CrearHorario @Est, 'SPR', @Franja2, 5, @IdHor2 OUTPUT;
+EXEC vac.usp_ReservarCita @IdPac, @IdHor, @IdSPR1, NULL, @IdCita OUTPUT;
+BEGIN TRY
+    EXEC vac.usp_ReservarCita @IdPac, @IdHor2, @IdSPR1, NULL, @IdCita OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_ReservarCita', 'RN-15: rechaza una segunda cita activa para la dosis', '50125', @Err);
+
+/* H8. RN-15: la dosis ya fue aplicada */
+BEGIN TRANSACTION;
+EXEC vac.usp_RegistrarPaciente 'DNI', '89050001', 'Prueba', 'Uno', NULL, @Nac20m, 'M', '230104', NULL, NULL, @IdPac OUTPUT;
+EXEC vac.usp_RegistrarDosis '89050001', 'SPR', 1, @LoteSPR, @Est, @Dni, NULL, NULL, @IdDosis OUTPUT;
+EXEC vac.usp_CrearHorario @Est, 'SPR', @Franja, 5, @IdHor OUTPUT;
+BEGIN TRY
+    EXEC vac.usp_ReservarCita @IdPac, @IdHor, @IdSPR1, NULL, @IdCita OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_ReservarCita', 'RN-15: rechaza una dosis ya aplicada', '50124', @Err);
+
+/* H9. La dosis es de otra vacuna que la franja */
+BEGIN TRANSACTION;
+EXEC vac.usp_RegistrarPaciente 'DNI', '89050001', 'Prueba', 'Uno', NULL, @Nac20m, 'M', '230104', NULL, NULL, @IdPac OUTPUT;
+EXEC vac.usp_CrearHorario @Est, 'BCG', @Franja, 5, @IdHor OUTPUT;
+BEGIN TRY
+    EXEC vac.usp_ReservarCita @IdPac, @IdHor, @IdSPR1, NULL, @IdCita OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_ReservarCita', 'Rechaza una dosis de otra vacuna', '50122', @Err);
+
+/* H10. 2.ª dosis sin la 1.ª */
+BEGIN TRANSACTION;
+EXEC vac.usp_RegistrarPaciente 'DNI', '89050001', 'Prueba', 'Uno', NULL, @Nac20m, 'M', '230104', NULL, NULL, @IdPac OUTPUT;
+EXEC vac.usp_CrearHorario @Est, 'SPR', @Franja, 5, @IdHor OUTPUT;
+BEGIN TRY
+    EXEC vac.usp_ReservarCita @IdPac, @IdHor, @IdSPR2, NULL, @IdCita OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_ReservarCita', 'Rechaza la 2.a dosis sin la 1.a', '50124', @Err);
+
+/* H11. Paciente menor de la edad mínima */
+BEGIN TRANSACTION;
+EXEC vac.usp_RegistrarPaciente 'DNI', '89050001', 'Prueba', 'Bebe', NULL, @Hoy, 'M', '230104', NULL, NULL, @IdPac OUTPUT;
+EXEC vac.usp_CrearHorario @Est, 'SPR', @Franja, 5, @IdHor OUTPUT;
+BEGIN TRY
+    EXEC vac.usp_ReservarCita @IdPac, @IdHor, @IdSPR1, NULL, @IdCita OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_ReservarCita', 'Rechaza al paciente menor de la edad mínima', '50124', @Err);
+
+/* H12. Franja inactiva */
+BEGIN TRANSACTION;
+EXEC vac.usp_RegistrarPaciente 'DNI', '89050001', 'Prueba', 'Uno', NULL, @Nac20m, 'M', '230104', NULL, NULL, @IdPac OUTPUT;
+EXEC vac.usp_CrearHorario @Est, 'SPR', @Franja, 5, @IdHor OUTPUT;
+EXEC vac.usp_ActualizarHorario @IdHor, 5, 0;
+BEGIN TRY
+    EXEC vac.usp_ReservarCita @IdPac, @IdHor, @IdSPR1, NULL, @IdCita OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_ReservarCita', 'Rechaza una franja inactiva', '50121', @Err);
+
+/* H13. Franja inexistente */
+BEGIN TRANSACTION;
+EXEC vac.usp_RegistrarPaciente 'DNI', '89050001', 'Prueba', 'Uno', NULL, @Nac20m, 'M', '230104', NULL, NULL, @IdPac OUTPUT;
+BEGIN TRY
+    EXEC vac.usp_ReservarCita @IdPac, -1, @IdSPR1, NULL, @IdCita OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_ReservarCita', 'Rechaza una franja inexistente', '50120', @Err);
+
+/* H14. Paciente inexistente */
+BEGIN TRANSACTION;
+EXEC vac.usp_CrearHorario @Est, 'SPR', @Franja, 5, @IdHor OUTPUT;
+BEGIN TRY
+    EXEC vac.usp_ReservarCita -1, @IdHor, @IdSPR1, NULL, @IdCita OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_ReservarCita', 'Rechaza un paciente inexistente', '50123', @Err);
+
+/* H15. RN-17: el ciudadano no puede reservar para un paciente no vinculado */
+BEGIN TRANSACTION;
+EXEC vac.usp_RegistrarPaciente 'DNI', '89050001', 'Prueba', 'Uno', NULL, @Nac20m, 'M', '230104', NULL, NULL, @IdPac OUTPUT;
+EXEC vac.usp_CrearHorario @Est, 'SPR', @Franja, 5, @IdHor OUTPUT;
+BEGIN TRY
+    EXEC vac.usp_ReservarCita @IdPac, @IdHor, @IdSPR1, @IdUsuCiud, @IdCita OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_ReservarCita', 'RN-17: rechaza a un ciudadano sin vínculo', '50127', @Err);
+
+/* H16. RN-17: el ciudadano reserva para un paciente vinculado */
+BEGIN TRANSACTION;
+EXEC vac.usp_RegistrarPaciente 'DNI', '89050001', 'Prueba', 'Uno', NULL, @Nac20m, 'M', '230104', NULL, NULL, @IdPac OUTPUT;
+INSERT vac.VinculoFamiliar (IdUsuario, IdPaciente, Parentesco) VALUES (@IdUsuCiud, @IdPac, 'MADRE');
+EXEC vac.usp_CrearHorario @Est, 'SPR', @Franja, 5, @IdHor OUTPUT;
+BEGIN TRY
+    EXEC vac.usp_ReservarCita @IdPac, @IdHor, @IdSPR1, @IdUsuCiud, @IdCita OUTPUT;
+    SET @Err = (SELECT Estado FROM vac.Cita WHERE IdCita = @IdCita);
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_ReservarCita', 'RN-17: acepta a un ciudadano vinculado', 'PROGRAMADA', @Err);
+
+/* H17. Una cita cancelada libera el cupo */
+BEGIN TRANSACTION;
+EXEC vac.usp_RegistrarPaciente 'DNI', '89050001', 'Prueba', 'Uno', NULL, @Nac20m, 'M', '230104', NULL, NULL, @IdPac OUTPUT;
+EXEC vac.usp_RegistrarPaciente 'DNI', '89050002', 'Prueba', 'Dos', NULL, @Nac20m, 'F', '230104', NULL, NULL, @IdPacB OUTPUT;
+EXEC vac.usp_CrearHorario @Est, 'SPR', @Franja, 1, @IdHor OUTPUT;
+EXEC vac.usp_ReservarCita @IdPac, @IdHor, @IdSPR1, NULL, @IdCita OUTPUT;
+UPDATE vac.Cita SET Estado = 'CANCELADA' WHERE IdCita = @IdCita;
+BEGIN TRY
+    EXEC vac.usp_ReservarCita @IdPacB, @IdHor, @IdSPR1, NULL, @IdCita OUTPUT;
+    SET @Err = (SELECT Estado FROM vac.Cita WHERE IdCita = @IdCita);
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_ReservarCita', 'Una cita cancelada libera el cupo', 'PROGRAMADA', @Err);
+
+/* H18. RN-14: el trigger revalida el cupo aunque se inserte sin el procedimiento */
+BEGIN TRANSACTION;
+EXEC vac.usp_RegistrarPaciente 'DNI', '89050001', 'Prueba', 'Uno', NULL, @Nac20m, 'M', '230104', NULL, NULL, @IdPac OUTPUT;
+EXEC vac.usp_RegistrarPaciente 'DNI', '89050002', 'Prueba', 'Dos', NULL, @Nac20m, 'F', '230104', NULL, NULL, @IdPacB OUTPUT;
+EXEC vac.usp_CrearHorario @Est, 'SPR', @Franja, 1, @IdHor OUTPUT;
+INSERT vac.Cita (IdHorario, IdPaciente, IdEsquema) VALUES (@IdHor, @IdPac, @IdSPR1);
+BEGIN TRY
+    INSERT vac.Cita (IdHorario, IdPaciente, IdEsquema) VALUES (@IdHor, @IdPacB, @IdSPR1);
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('trg_Cita_Validar', 'RN-14: revalida el cupo en inserción directa', '50126', @Err);
+
+/* H19. RN-15: el trigger rechaza la dosis ya aplicada en inserción directa */
+BEGIN TRANSACTION;
+EXEC vac.usp_RegistrarPaciente 'DNI', '89050001', 'Prueba', 'Uno', NULL, @Nac20m, 'M', '230104', NULL, NULL, @IdPac OUTPUT;
+EXEC vac.usp_RegistrarDosis '89050001', 'SPR', 1, @LoteSPR, @Est, @Dni, NULL, NULL, @IdDosis OUTPUT;
+EXEC vac.usp_CrearHorario @Est, 'SPR', @Franja, 5, @IdHor OUTPUT;
+BEGIN TRY
+    INSERT vac.Cita (IdHorario, IdPaciente, IdEsquema) VALUES (@IdHor, @IdPac, @IdSPR1);
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('trg_Cita_Validar', 'RN-15: rechaza la dosis aplicada en inserción directa', '50124', @Err);
+
+/* H20. No se baja el cupo de una franja por debajo de las citas que ya tiene */
+BEGIN TRANSACTION;
+EXEC vac.usp_RegistrarPaciente 'DNI', '89050001', 'Prueba', 'Uno', NULL, @Nac20m, 'M', '230104', NULL, NULL, @IdPac OUTPUT;
+EXEC vac.usp_RegistrarPaciente 'DNI', '89050002', 'Prueba', 'Dos', NULL, @Nac20m, 'F', '230104', NULL, NULL, @IdPacB OUTPUT;
+EXEC vac.usp_CrearHorario @Est, 'SPR', @Franja, 3, @IdHor OUTPUT;
+EXEC vac.usp_ReservarCita @IdPac, @IdHor, @IdSPR1, NULL, @IdCita OUTPUT;
+EXEC vac.usp_ReservarCita @IdPacB, @IdHor, @IdSPR1, NULL, @IdCita OUTPUT;
+BEGIN TRY
+    EXEC vac.usp_ActualizarHorario @IdHor, 1, 1;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_ActualizarHorario', 'Rechaza un cupo menor que las citas existentes', '50128', @Err);
+
 SELECT Caso, IIF(Esperado = Obtenido, 'OK', 'FALLA') AS Resultado, Objeto, Prueba, Esperado, Obtenido
 FROM @R ORDER BY Caso;
 SELECT SUM(IIF(Esperado = Obtenido, 1, 0)) AS Correctas, COUNT(*) AS Total FROM @R;

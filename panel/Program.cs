@@ -5,6 +5,7 @@ using Microsoft.Data.SqlClient;
 using VacunApp.Panel.Auth;
 using VacunApp.Panel.Data;
 using VacunApp.Panel.Pacientes;
+using VacunApp.Panel.Agenda;
 using VacunApp.Panel.Stock;
 
 // Interfaz mínima de consulta de VacunApp Tacna.
@@ -80,6 +81,7 @@ app.MapDosis();
 app.MapCarne();
 app.MapAuditoria();
 app.MapStock();
+app.MapHorarios();
 
 // RN-22: las consultas regionales son solo del epidemiólogo y el administrador.
 var regional = app.MapGroup("/api").RequireAuthorization(Politicas.Regional);

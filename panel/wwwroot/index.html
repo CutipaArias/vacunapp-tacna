@@ -24,6 +24,7 @@
   <button data-tab="campanas" data-roles="ADMINISTRADOR EPIDEMIOLOGO" hidden>Campañas</button>
   <button data-tab="paciente" data-roles="ADMINISTRADOR EPIDEMIOLOGO JEFE_ESTABLECIMIENTO VACUNADOR CIUDADANO" hidden>Paciente</button>
   <button data-tab="stock" data-roles="JEFE_ESTABLECIMIENTO" hidden>Stock</button>
+  <button data-tab="horarios" data-roles="JEFE_ESTABLECIMIENTO" hidden>Horarios</button>
   <button data-tab="usuarios" data-roles="ADMINISTRADOR" hidden>Usuarios</button>
   <button data-tab="auditoria" data-roles="ADMINISTRADOR" hidden>Auditoría</button>
 </nav>
@@ -159,6 +160,38 @@
         <button class="b" type="submit">Ingresar</button>
       </form>
       <div id="i-msg" role="alert"></div>
+    </div>
+  </section>
+
+  <section id="horarios">
+    <div class="card">
+      <h2>Franjas de atención <span class="time" id="t-hor"></span></h2>
+      <p>Cupos por vacuna y horario de su establecimiento. El cupo no puede bajar de las citas ya reservadas.</p>
+      <form class="filters" id="f-hor-rango" autocomplete="off">
+        <label>Desde <input id="h-desde" type="date" required></label>
+        <label>Hasta <input id="h-hasta" type="date" required></label>
+        <button class="b" type="submit">Ver</button>
+      </form>
+      <div class="tbl"><table id="hor-tbl"></table></div>
+      <form class="filters" id="f-hor-ed" autocomplete="off" hidden>
+        <strong id="he-franja"></strong>
+        <label>Cupo máximo <input id="he-cupo" type="number" min="1" max="500" required></label>
+        <label>Activa <select id="he-activo"><option value="1">Sí</option><option value="0">No</option></select></label>
+        <button class="b" type="submit">Guardar</button>
+        <button class="b sec" type="button" id="he-cancelar">Cancelar</button>
+      </form>
+      <div id="he-msg" role="alert"></div>
+    </div>
+    <div class="card">
+      <h2>Nueva franja</h2>
+      <form class="filters" id="f-hor" autocomplete="off">
+        <label>Vacuna <select id="h-vac"></select></label>
+        <label>Fecha <input id="h-fecha" type="date" required></label>
+        <label>Hora <input id="h-hora" type="time" required></label>
+        <label>Cupo máximo <input id="h-cupo" type="number" min="1" max="500" value="10" required></label>
+        <button class="b" type="submit">Crear</button>
+      </form>
+      <div id="h-msg" role="alert"></div>
     </div>
   </section>
 

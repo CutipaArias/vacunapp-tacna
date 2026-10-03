@@ -25,7 +25,7 @@ const tag = v => `<span class="tag ${esc(v)}">${esc(v)}</span>`;
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
   document.querySelectorAll('nav button, section').forEach(x => x.classList.remove('on'));
   b.classList.add('on'); $('#' + b.dataset.tab).classList.add('on');
-  ({ cobertura: cargarCobertura, alertas: cargarAlertas, campanas: cargarCampanas, stock: cargarStock, usuarios: cargarUsuarios, auditoria: cargarAuditoria })[b.dataset.tab]?.();
+  ({ cobertura: cargarCobertura, alertas: cargarAlertas, campanas: cargarCampanas, stock: cargarStock, horarios: cargarHorarios, usuarios: cargarUsuarios, auditoria: cargarAuditoria })[b.dataset.tab]?.();
 });
 
 async function cargarResumen() {
@@ -174,6 +174,60 @@ function prepararStock() {
   };
 }
 
+// ---- Horarios del establecimiento (solo JEFE_ESTABLECIMIENTO) ----
+let horarios = [];
+const hoyISO = (dias = 0) => { const d = new Date(); d.setDate(d.getDate() + dias); return d.toLocaleDateString('sv-SE'); };
+
+async function cargarHorarios() {
+  const filas = await api('/api/horarios?' + new URLSearchParams({ desde: $('#h-desde').value, hasta: $('#h-hasta').value }));
+  horarios = filas;
+  $('#t-hor').textContent = `· ${filas.length} franjas · ${filas.__ms} ms`;
+  table($('#hor-tbl'), [
+    { h: 'Fecha', f: r => fecha(r.fechaHora) }, { h: 'Hora', f: r => esc(String(r.fechaHora).slice(11, 16)) }, { h: 'Vacuna', k: 'vacuna' },
+    { h: 'Cupo', n: 1, f: r => fmt(r.cupoMaximo) }, { h: 'Reservados', n: 1, f: r => fmt(r.ocupados) },
+    { h: 'Libres', n: 1, f: r => fmt(Math.max(r.cupoMaximo - r.ocupados, 0)) },
+    { h: 'Estado', f: r => r.activo ? '<span class="tag ÓPTIMA">Activa</span>' : '<span class="tag ACEPTABLE">Inactiva</span>' },
+    { h: '', f: r => `<button class="b sec" data-id="${r.idHorario}">Editar</button>` }
+  ], filas);
+}
+
+function prepararHorarios() {
+  $('#h-desde').value = hoyISO(); $('#h-hasta').value = hoyISO(30); $('#h-fecha').min = hoyISO();
+  $('#h-vac').innerHTML = [...new Set(cat.esquema.map(e => e.Codigo))].map(c => `<option>${esc(c)}</option>`).join('');
+  $('#f-hor-rango').onsubmit = async e => {
+    e.preventDefault();
+    try { await cargarHorarios(); $('#he-msg').innerHTML = ''; } catch (err) { $('#he-msg').innerHTML = `<div class="msg err">${esc(err.message)}</div>`; }
+  };
+  $('#f-hor').onsubmit = async e => {
+    e.preventDefault();
+    try {
+      await api('/api/horarios', json({ vacuna: $('#h-vac').value, fechaHora: `${$('#h-fecha').value}T${$('#h-hora').value}`, cupoMaximo: +$('#h-cupo').value }));
+      $('#h-msg').innerHTML = '<div class="msg ok">Franja creada.</div>';
+      await cargarHorarios();
+    } catch (err) { $('#h-msg').innerHTML = `<div class="msg err">${esc(err.message)}</div>`; }
+  };
+  let editando = null;
+  $('#hor-tbl').onclick = e => {
+    const b = e.target.closest('button[data-id]');
+    if (!b) return;
+    editando = horarios.find(x => x.idHorario === +b.dataset.id);
+    $('#he-franja').textContent = `${editando.vacuna} · ${fecha(editando.fechaHora)} ${String(editando.fechaHora).slice(11, 16)} (${fmt(editando.ocupados)} reservados)`;
+    $('#he-cupo').value = editando.cupoMaximo; $('#he-activo').value = editando.activo ? '1' : '0';
+    $('#f-hor-ed').hidden = false; $('#he-msg').innerHTML = ''; $('#he-cupo').focus();
+  };
+  $('#he-cancelar').onclick = () => { $('#f-hor-ed').hidden = true; editando = null; };
+  $('#f-hor-ed').onsubmit = async e => {
+    e.preventDefault();
+    try {
+      await api(`/api/horarios/${editando.idHorario}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cupoMaximo: +$('#he-cupo').value, activo: $('#he-activo').value === '1' }) });
+      $('#f-hor-ed').hidden = true; editando = null;
+      $('#he-msg').innerHTML = '<div class="msg ok">Franja actualizada.</div>';
+      await cargarHorarios();
+    } catch (err) { $('#he-msg').innerHTML = `<div class="msg err">${esc(err.message)}</div>`; }
+  };
+}
+
 // ---- Auditoría de dosis (solo ADMINISTRADOR) ----
 async function cargarAuditoria() {
   const r = await api('/api/auditoria?' + new URLSearchParams({ documento: $('#au-doc').value.trim(), operacion: $('#au-op').value, top: 200 }));
@@ -317,6 +371,7 @@ async function init() {
   $('#b-cob').onclick = cargarCobertura; $('#b-ale').onclick = cargarAlertas; $('#b-pac').onclick = buscarPaciente;
   $('#p-doc').onkeydown = e => e.key === 'Enter' && buscarPaciente();
   if (tabs.includes('stock')) prepararStock();
+  if (tabs.includes('horarios')) prepararHorarios();
   if (tabs.includes('usuarios')) prepararUsuarios();
   if (tabs.includes('auditoria')) $('#b-aud').onclick = cargarAuditoria;
   if (yo.rol === 'VACUNADOR') prepararAltaPaciente();

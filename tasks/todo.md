@@ -126,13 +126,13 @@ Plan: [plan.md](plan.md) · Spec: [../SPEC.md](../SPEC.md)
 ---
 ## Fase 4 – `agenda`
 
-- [ ] **T4.1 Tablas `HorarioAtencion` y `Cita` + gestión de horarios (RF-08, CU08)** (M)
+- [x] **T4.1 Tablas `HorarioAtencion` y `Cita` + gestión de horarios (RF-08, CU08)** (M)
   - Acceptance: franjas con cupo máximo por establecimiento, vacuna y fecha/hora; índice único que evita franjas duplicadas; el jefe las crea/edita en su establecimiento.
   - Verify: xUnit (jefe ok, otro establecimiento 403); `desplegar` idempotente
-  - Files: `database/10_agenda.sql`, `panel/Agenda/HorariosEndpoints.cs`, `panel/wwwroot/horarios.html`, `tests/…`
+  - Files: `database/10_agenda.sql`, `panel/Agenda/HorariosEndpoints.cs`, pestaña Horarios en `panel/wwwroot/index.html` y `panel.js`, `tests/VacunApp.Tests/HorariosTests.cs`
   - Deps: Checkpoint C
 
-- [ ] **T4.2 `usp_ReservarCita` con control de concurrencia (RF-05, CU05, RN-14/15/17)** (M) — **tarea de mayor riesgo**
+- [x] **T4.2 `usp_ReservarCita` con control de concurrencia (RF-05, CU05, RN-14/15/17)** (M) — **tarea de mayor riesgo**
   - Acceptance: reserva con `UPDLOCK, HOLDLOCK`; `trg_Cita_Validar` revalida cupo y elegibilidad; no hay dos citas activas para la misma dosis; el ciudadano solo reserva para pacientes vinculados.
   - Verify: `tests/concurrencia.ps1`: 2, 10 y 20 sesiones sobre 1 cupo → exactamente 1 aceptada; pruebas BD RN-14/15
   - Files: `database/10_agenda.sql`, `tests/concurrencia.ps1`, `database/07_pruebas.sql`
