@@ -24,6 +24,7 @@
   <button data-tab="campanas" data-roles="ADMINISTRADOR EPIDEMIOLOGO" hidden>Campañas</button>
   <button data-tab="paciente" data-roles="ADMINISTRADOR EPIDEMIOLOGO JEFE_ESTABLECIMIENTO VACUNADOR CIUDADANO" hidden>Paciente</button>
   <button data-tab="usuarios" data-roles="ADMINISTRADOR" hidden>Usuarios</button>
+  <button data-tab="auditoria" data-roles="ADMINISTRADOR" hidden>Auditoría</button>
 </nav>
 <main>
   <div id="aviso"></div>
@@ -110,6 +111,19 @@
         <button class="b" id="b-reg">Registrar</button>
       </div>
       <div id="r-msg"></div>
+    </div>
+  </section>
+
+  <section id="auditoria">
+    <div class="card">
+      <h2>Auditoría de dosis <span class="time" id="t-aud"></span></h2>
+      <p>Correcciones (U) y eliminaciones (D) de dosis aplicadas, con el estado anterior y el nuevo. Lo más reciente primero.</p>
+      <div class="filters">
+        <label>DNI del paciente <input id="au-doc" maxlength="12"></label>
+        <label>Operación <select id="au-op"><option value="">Todas</option><option value="U">Corrección (U)</option><option value="D">Eliminación (D)</option></select></label>
+        <button class="b" id="b-aud">Consultar</button>
+      </div>
+      <div class="tbl"><table id="aud"></table></div>
     </div>
   </section>
 

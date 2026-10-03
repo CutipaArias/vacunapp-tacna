@@ -77,6 +77,7 @@ app.MapUsuarios();
 app.MapPacientes();
 app.MapDosis();
 app.MapCarne();
+app.MapAuditoria();
 
 // RN-22: las consultas regionales son solo del epidemiólogo y el administrador.
 var regional = app.MapGroup("/api").RequireAuthorization(Politicas.Regional);

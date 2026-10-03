@@ -195,7 +195,8 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    INSERT INTO vac.AuditoriaDosis (IdDosis, Operacion, DatosAnteriores, DatosNuevos)
+    /* Usuario: el de la aplicación (sp_set_session_context N'usuario') o, si no hay, el login de SQL Server */
+    INSERT INTO vac.AuditoriaDosis (IdDosis, Operacion, DatosAnteriores, DatosNuevos, Usuario)
     SELECT d.IdDosis,
            CASE WHEN i.IdDosis IS NULL THEN 'D' ELSE 'U' END,
            (SELECT d.IdPaciente, d.IdEsquema, d.IdLote, d.IdEstablecimiento, d.IdVacunador,
@@ -205,7 +206,8 @@ BEGIN
                (SELECT i.IdPaciente, i.IdEsquema, i.IdLote, i.IdEstablecimiento, i.IdVacunador,
                        i.IdCampana, i.FechaAplicacion
                 FOR JSON PATH, WITHOUT_ARRAY_WRAPPER)
-           END
+           END,
+           COALESCE(CAST(SESSION_CONTEXT(N'usuario') AS NVARCHAR(128)), SUSER_SNAME())
     FROM deleted d
     LEFT JOIN inserted i ON i.IdDosis = d.IdDosis;
 END

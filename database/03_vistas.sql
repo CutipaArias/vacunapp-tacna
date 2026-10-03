@@ -244,3 +244,23 @@ AS
            (SELECT CAST(100.0 * SUM(ConSPR1) / NULLIF(SUM(ElegiblesSPR1), 0) AS DECIMAL(5,2)) FROM vac.vw_CoberturaSarampion) AS CoberturaRegionalSPR1,
            (SELECT CAST(100.0 * SUM(ConSPR2) / NULLIF(SUM(ElegiblesSPR2), 0) AS DECIMAL(5,2)) FROM vac.vw_CoberturaSarampion) AS CoberturaRegionalSPR2;
 GO
+
+/* Auditoría de dosis (RN-23): descompone el JSON que guarda trg_DosisAplicada_Auditoria
+   para que se pueda consultar sin leer JSON a mano. */
+CREATE OR ALTER VIEW vac.vw_AuditoriaDosis
+AS
+    SELECT a.IdAuditoria, a.IdDosis, a.Operacion, a.Fecha, a.Usuario,
+           p.NumeroDocumento,
+           CONCAT(p.ApellidoPaterno, ' ', p.ApellidoMaterno, ', ', p.Nombres) AS Paciente,
+           v.Codigo AS CodigoVacuna, e.NumeroDosis,
+           TRY_CAST(JSON_VALUE(a.DatosAnteriores, '$.FechaAplicacion') AS DATE) AS FechaAplicacionAnterior,
+           TRY_CAST(JSON_VALUE(a.DatosNuevos,     '$.FechaAplicacion') AS DATE) AS FechaAplicacionNueva,
+           la.NumeroLote AS LoteAnterior, ln.NumeroLote AS LoteNuevo,
+           a.DatosAnteriores, a.DatosNuevos
+    FROM vac.AuditoriaDosis a
+    LEFT JOIN vac.Paciente p     ON p.IdPaciente = TRY_CAST(JSON_VALUE(a.DatosAnteriores, '$.IdPaciente') AS INT)
+    LEFT JOIN vac.EsquemaDosis e ON e.IdEsquema  = TRY_CAST(JSON_VALUE(a.DatosAnteriores, '$.IdEsquema') AS SMALLINT)
+    LEFT JOIN vac.Vacuna v       ON v.IdVacuna   = e.IdVacuna
+    LEFT JOIN vac.LoteVacuna la  ON la.IdLote    = TRY_CAST(JSON_VALUE(a.DatosAnteriores, '$.IdLote') AS INT)
+    LEFT JOIN vac.LoteVacuna ln  ON ln.IdLote    = TRY_CAST(JSON_VALUE(a.DatosNuevos,     '$.IdLote') AS INT);
+GO

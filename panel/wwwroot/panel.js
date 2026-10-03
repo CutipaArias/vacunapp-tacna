@@ -25,7 +25,7 @@ const tag = v => `<span class="tag ${esc(v)}">${esc(v)}</span>`;
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
   document.querySelectorAll('nav button, section').forEach(x => x.classList.remove('on'));
   b.classList.add('on'); $('#' + b.dataset.tab).classList.add('on');
-  ({ cobertura: cargarCobertura, alertas: cargarAlertas, campanas: cargarCampanas, usuarios: cargarUsuarios })[b.dataset.tab]?.();
+  ({ cobertura: cargarCobertura, alertas: cargarAlertas, campanas: cargarCampanas, usuarios: cargarUsuarios, auditoria: cargarAuditoria })[b.dataset.tab]?.();
 });
 
 async function cargarResumen() {
@@ -116,6 +116,20 @@ function prepararRegistro(doc, pendientes) {
       $('#r-msg').innerHTML = `<div class="msg ok">Dosis registrada (Id ${r.idDosis}). Las alertas asociadas se cerraron automáticamente.</div>`;
     } catch (e) { $('#r-msg').innerHTML = `<div class="msg err">${esc(e.message)}</div>`; }
   };
+}
+
+// ---- Auditoría de dosis (solo ADMINISTRADOR) ----
+async function cargarAuditoria() {
+  const r = await api('/api/auditoria?' + new URLSearchParams({ documento: $('#au-doc').value.trim(), operacion: $('#au-op').value, top: 200 }));
+  $('#t-aud').textContent = `· ${r.length} registros · ${r.__ms} ms`;
+  table($('#aud'), [
+    { h: 'Fecha', f: r => esc(String(r.fecha).replace('T', ' ').slice(0, 19)) },
+    { h: 'Operación', f: r => `<span class="tag ${r.operacion === 'D' ? 'CRÍTICA' : 'ACEPTABLE'}">${r.operacion === 'D' ? 'Eliminada' : 'Corregida'}</span>` },
+    { h: 'Usuario', k: 'usuario' }, { h: 'DNI', k: 'numeroDocumento' }, { h: 'Paciente', k: 'paciente' },
+    { h: 'Dosis', f: r => `${esc(r.codigoVacuna)} · ${esc(r.numeroDosis)}` },
+    { h: 'Fecha anterior', f: r => fecha(r.fechaAplicacionAnterior) }, { h: 'Fecha nueva', f: r => fecha(r.fechaAplicacionNueva) },
+    { h: 'Lote anterior → nuevo', f: r => `${esc(r.loteAnterior ?? '—')} → ${esc(r.loteNuevo ?? '—')}` }
+  ], r);
 }
 
 // ---- Ciudadano: solo ve el carné de los hijos vinculados a su usuario (RN-17) ----
@@ -247,6 +261,7 @@ async function init() {
   $('#b-cob').onclick = cargarCobertura; $('#b-ale').onclick = cargarAlertas; $('#b-pac').onclick = buscarPaciente;
   $('#p-doc').onkeydown = e => e.key === 'Enter' && buscarPaciente();
   if (tabs.includes('usuarios')) prepararUsuarios();
+  if (tabs.includes('auditoria')) $('#b-aud').onclick = cargarAuditoria;
   if (yo.rol === 'VACUNADOR') prepararAltaPaciente();
   if (yo.rol === 'CIUDADANO') await prepararHijos();
 

@@ -84,7 +84,7 @@ Plan: [plan.md](plan.md) · Spec: [../SPEC.md](../SPEC.md)
   - Files: `panel/Pacientes/CarneEndpoints.cs`, `panel/wwwroot/carne.html`, `tests/…`
   - Deps: T2.1
 
-- [ ] **T2.4 Auditoría de dosis (RF-16, CU15)** (S)
+- [x] **T2.4 Auditoría de dosis (RF-16, CU15)** (S)
   - Acceptance: el administrador consulta el JSON de correcciones/eliminaciones de `trg_DosisAplicada_Auditoria` (RN-23); otros roles 403.
   - Verify: prueba BD (UPDATE y DELETE generan fila) + xUnit 403
   - Files: `panel/Program.cs`, `panel/wwwroot/auditoria.html`, `tests/…`

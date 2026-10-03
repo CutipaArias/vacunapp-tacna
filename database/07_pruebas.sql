@@ -229,6 +229,34 @@ END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
 IF @@TRANCOUNT > 0 ROLLBACK;
 INSERT @R VALUES ('trg_DosisAplicada_Validar', 'Rechaza vacunador inactivo con INSERT directo', '50106', @Err);
 
+/* A1/A2. Auditoría (RN-23): la vista descompone el JSON y registra al usuario de la aplicación */
+DECLARE @PacA INT, @LoteA INT, @IdDosisA BIGINT, @FechaNueva DATE = DATEADD(DAY, -1, @Hoy);
+BEGIN TRANSACTION;
+BEGIN TRY
+    EXEC vac.usp_RegistrarPaciente 'DNI', '89000010', 'Prueba', 'Auditoria', NULL, @Nac20m, 'M', '230104', NULL, NULL, @PacA OUTPUT;
+    SELECT TOP (1) @LoteA = l.IdLote FROM vac.LoteVacuna l JOIN vac.EsquemaDosis e ON e.IdVacuna = l.IdVacuna
+    WHERE e.IdEsquema = @IdSPR1 AND l.FechaVencimiento >= @Hoy ORDER BY l.FechaVencimiento DESC;
+    INSERT INTO vac.DosisAplicada (IdPaciente, IdEsquema, IdLote, IdEstablecimiento, IdVacunador, FechaAplicacion)
+    VALUES (@PacA, @IdSPR1, @LoteA, @Est, @IdVacunador, @Hoy);
+    SET @IdDosisA = SCOPE_IDENTITY();
+    EXEC sp_set_session_context @key = N'usuario', @value = N'vac01';
+
+    UPDATE vac.DosisAplicada SET FechaAplicacion = @FechaNueva WHERE IdDosis = @IdDosisA;
+    SET @Err = (SELECT CONCAT(Operacion, '|', Usuario, '|', FORMAT(FechaAplicacionAnterior, 'yyyy-MM-dd'), '|', FORMAT(FechaAplicacionNueva, 'yyyy-MM-dd'), '|', NumeroDocumento)
+                FROM vac.vw_AuditoriaDosis WHERE IdDosis = @IdDosisA AND Operacion = 'U');
+    INSERT @R VALUES ('vw_AuditoriaDosis', 'UPDATE: operación, usuario de la app, fechas y paciente', CONCAT('U|vac01|', FORMAT(@Hoy, 'yyyy-MM-dd'), '|', FORMAT(@FechaNueva, 'yyyy-MM-dd'), '|89000010'), @Err);
+
+    DELETE vac.DosisAplicada WHERE IdDosis = @IdDosisA;
+    SET @Err = (SELECT CONCAT(Operacion, '|', Usuario, '|', IIF(DatosNuevos IS NULL, 'sin-nuevos', 'con-nuevos'), '|', IIF(FechaAplicacionNueva IS NULL, 'sin-fecha', 'con-fecha'))
+                FROM vac.vw_AuditoriaDosis WHERE IdDosis = @IdDosisA AND Operacion = 'D');
+    INSERT @R VALUES ('vw_AuditoriaDosis', 'DELETE: operación, usuario y sin datos nuevos', 'D|vac01|sin-nuevos|sin-fecha', @Err);
+END TRY BEGIN CATCH
+    SET @Err = CAST(ERROR_NUMBER() AS VARCHAR);
+    INSERT @R VALUES ('vw_AuditoriaDosis', 'Auditoría de UPDATE y DELETE', 'OK', @Err);
+END CATCH;
+EXEC sp_set_session_context @key = N'usuario', @value = NULL;
+IF @@TRANCOUNT > 0 ROLLBACK;
+
 /* =================== Módulo identidad (08_seguridad.sql) =================== */
 
 /* S1. Los cinco roles existen */
