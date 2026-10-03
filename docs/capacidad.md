@@ -48,9 +48,20 @@ con carné y altas, 2 jefes con stock): 85 651 solicitudes, ≈ 950 por segundo.
 Los errores de la corrida (7 558) fueron altas de prueba rechazadas a propósito por la base (documento duplicado al
 repetirse DNI aleatorios y dosis sin stock en el lote usado); ninguna lectura falló.
 
-## Fuera de la medición
-`GET /api/pendientes` (`vac.usp_ListarPendientes`) tarda de 15 a 40 s con este volumen. No se incluyó en la carga; su
-optimización está en una tarea aparte y es requisito de T5.2.
+## Fuera de la medición de carga
+`GET /api/pendientes` (`vac.usp_ListarPendientes`) no se incluyó en la carga concurrente. Medido después, de forma
+aislada, con los mismos 20 000 pacientes (corrida repetida, base en caliente; el valor de 15 a 40 s que figuraba antes
+no se reprodujo):
+
+| Llamada | Tiempo |
+|---|---|
+| Global (`@Top = 200`) | ≈ 0,5 s |
+| Por distrito / por vacuna | ≈ 0,4 s |
+| `@SoloZonaBrote = 1` | ≈ 4,3 s |
+
+El último caso **supera la meta de 2 s (RNF-01)**. El tiempo se va en `fn_PendientesZonaBrote`, no en el índice de
+dosis: se probó cambiar `IX_Dosis_Esquema` a `(IdEsquema, IdPaciente)` y no mejoró nada medible (se descartó). Se
+resuelve en T5.1 (brotes), donde vive esa función; no se toca antes.
 
 ## Reproducir
 Generador de carga temporal (no incluido en el repositorio): inicia sesión con los usuarios semilla y repite las consultas

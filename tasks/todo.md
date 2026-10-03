@@ -164,6 +164,7 @@ Plan: [plan.md](plan.md) · Spec: [../SPEC.md](../SPEC.md)
 
 - [ ] **T5.1 Brotes: declarar/cerrar con autorización (RF-10, CU10, RN-19/20)** (M)
   - Acceptance: solo epidemiólogo/admin; un solo brote activo por enfermedad y distrito (índice único filtrado); declarar genera alertas de pendientes y devuelve cuántas.
+  - Incluye: `usp_ListarPendientes @SoloZonaBrote = 1` tarda ~4,3 s con 20 000 pacientes (meta RNF-01: < 2 s; ver `docs/capacidad.md`). Optimizar `fn_PendientesZonaBrote` y medir antes/después.
   - Verify: pruebas BD RN-19/20; xUnit (vacunador → 403)
   - Files: `panel/Vigilancia/BrotesEndpoints.cs`, `panel/wwwroot/brotes.html`, `database/07_pruebas.sql`, `tests/…`
   - Deps: Checkpoint D
