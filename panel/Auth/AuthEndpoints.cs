@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
@@ -10,6 +11,11 @@ static class AuthEndpoints
 {
     public const string ClaimEstablecimiento = "est";
     const string MensajeCredenciales = "Usuario o contraseña incorrectos.";
+
+    /// <summary>Intentos fallidos seguidos que bloquean la cuenta, y duración del bloqueo (adición al spec, T1.6).</summary>
+    public const int MaxIntentos = 5;
+    public const int MinutosBloqueo = 15;
+    public const string PoliticaLimiteLogin = "login";
 
     public static IServiceCollection AddAutenticacion(this IServiceCollection services, IWebHostEnvironment env)
     {
@@ -25,7 +31,7 @@ static class AuthEndpoints
                 o.Cookie.SecurePolicy = env.IsDevelopment() ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
                 o.ExpireTimeSpan = TimeSpan.FromHours(8);
                 o.SlidingExpiration = false;
-                // Es una API: sin sesión se responde 401/403, nunca una redirección HTML.
+                // Es una API: sin sesión se responde 401/403, nunca una redirección HTML (más abajo).
                 // Cada solicitud revalida la cuenta: una baja o un cambio de rol/establecimiento
                 // surte efecto de inmediato, sin esperar a que venza la cookie.
                 o.Events.OnValidatePrincipal = async ctx =>
@@ -45,6 +51,21 @@ static class AuthEndpoints
                 o.Events.OnRedirectToAccessDenied = ctx => { ctx.Response.StatusCode = StatusCodes.Status403Forbidden; return Task.CompletedTask; };
             });
         services.AddAuthorization(Politicas.Configurar);
+
+        // Límite de solicitudes de login por IP (complementa el bloqueo por cuenta). El contador vive en
+        // memoria: vale para una sola instancia, que es el despliegue previsto (plan gratuito de MonsterASP.NET).
+        services.AddRateLimiter(o =>
+        {
+            o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            o.AddPolicy(PoliticaLimiteLogin, ctx => RateLimitPartition.GetFixedWindowLimiter(
+                ctx.Connection.RemoteIpAddress?.ToString() ?? "desconocida",
+                _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = ctx.RequestServices.GetRequiredService<IConfiguration>().GetValue("RateLimit:LoginPerMinute", 20),
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0,
+                }));
+        });
         return services;
     }
 
@@ -55,8 +76,9 @@ static class AuthEndpoints
         var hashFalso = new PasswordHasher<CuentaUsuario>().HashPassword(null!, Guid.NewGuid().ToString("N"));
 
         app.MapPost("/api/login", async (
-            LoginRequest req, HttpContext ctx, UsuarioRepo repo, IPasswordHasher<CuentaUsuario> hasher) =>
+            LoginRequest req, HttpContext ctx, UsuarioRepo repo, IPasswordHasher<CuentaUsuario> hasher, ILoggerFactory logs) =>
         {
+            var log = logs.CreateLogger("Auth");
             var usuario = req.Usuario?.Trim();
             if (string.IsNullOrEmpty(usuario) || usuario.Length > 30 ||
                 string.IsNullOrEmpty(req.Clave) || req.Clave.Length > PoliticaClave.Maximo)
@@ -64,10 +86,25 @@ static class AuthEndpoints
 
             var cuenta = await repo.BuscarAsync(usuario);
             var resultado = hasher.VerifyHashedPassword(cuenta!, cuenta?.ClaveHash ?? hashFalso, req.Clave);
+            var claveCorrecta = cuenta?.ClaveHash is not null && resultado != PasswordVerificationResult.Failed;
 
-            if (cuenta is null || !cuenta.Activo || cuenta.ClaveHash is null || resultado == PasswordVerificationResult.Failed)
+            // Cuenta bloqueada: se rechaza aunque la clave sea correcta, con el mismo mensaje de siempre.
+            if (cuenta is { Bloqueada: true })
+            {
+                log.LogWarning("Intento de acceso a la cuenta bloqueada {Usuario} desde {Ip}", usuario, ctx.Connection.RemoteIpAddress);
                 return Results.Json(new { error = MensajeCredenciales }, statusCode: StatusCodes.Status401Unauthorized);
+            }
 
+            if (cuenta is null || !cuenta.Activo || !claveCorrecta)
+            {
+                // Solo las cuentas existentes y activas acumulan fallos; un usuario inexistente no deja rastro.
+                if (cuenta is { Activo: true, ClaveHash: not null })
+                    await repo.RegistrarFalloAsync(cuenta.IdUsuario, MaxIntentos, MinutosBloqueo);
+                log.LogWarning("Acceso fallido para {Usuario} desde {Ip}", usuario, ctx.Connection.RemoteIpAddress);
+                return Results.Json(new { error = MensajeCredenciales }, statusCode: StatusCodes.Status401Unauthorized);
+            }
+
+            await repo.RegistrarExitoAsync(cuenta.IdUsuario);
             if (resultado == PasswordVerificationResult.SuccessRehashNeeded)
                 await repo.ActualizarHashAsync(cuenta.IdUsuario, hasher.HashPassword(cuenta, req.Clave));
 
@@ -83,7 +120,7 @@ static class AuthEndpoints
             var principal = new ClaimsPrincipal(identidad);
             await ctx.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
             return Results.Ok(Perfil(principal, cuenta.NombreCompleto));
-        }).AllowAnonymous();
+        }).AllowAnonymous().RequireRateLimiting(PoliticaLimiteLogin);
 
         app.MapPost("/api/logout", async (HttpContext ctx) =>
         {

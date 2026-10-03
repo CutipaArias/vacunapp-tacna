@@ -10,15 +10,49 @@ using VacunApp.Panel.Data;
 // esta API solo los expone como JSON para la página de wwwroot.
 
 var builder = WebApplication.CreateBuilder(args);
-var connectionString = builder.Configuration.GetConnectionString("VacunApp")
-    ?? throw new InvalidOperationException(
-        "Falta ConnectionStrings:VacunApp: use appsettings.Development.json (vea el .example) o la variable ConnectionStrings__VacunApp.");
 
-var db = new Db(connectionString);
-builder.Services.AddSingleton(db);
+// La cadena de conexión se lee al resolver Db (no al construir el builder) para que cualquier
+// fuente de configuración —archivo, variable de entorno, pruebas— se aplique por igual.
+builder.Services.AddSingleton(sp => new Db(
+    sp.GetRequiredService<IConfiguration>().GetConnectionString("VacunApp")
+    ?? throw new InvalidOperationException(
+        "Falta ConnectionStrings:VacunApp: use appsettings.Development.json (vea el .example) o la variable ConnectionStrings__VacunApp.")));
 builder.Services.AddAutenticacion(builder.Environment);
 
 var app = builder.Build();
+var db = app.Services.GetRequiredService<Db>();
+
+// Fuera de desarrollo, un error inesperado nunca muestra trazas ni detalles internos.
+if (!app.Environment.IsDevelopment())
+{
+    app.UseExceptionHandler(salida => salida.Run(async ctx =>
+    {
+        ctx.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        await ctx.Response.WriteAsJsonAsync(new { error = "Ocurrió un error interno. Intente nuevamente." });
+    }));
+    app.UseHsts();
+}
+
+// Cabeceras de seguridad en todas las respuestas. 'unsafe-inline' solo se admite en estilos
+// (las barras de cobertura usan style=""); los scripts deben venir de archivos propios.
+app.Use(async (ctx, next) =>
+{
+    ctx.Response.OnStarting(() =>
+    {
+        var h = ctx.Response.Headers;
+        h["X-Content-Type-Options"] = "nosniff";
+        h["X-Frame-Options"] = "DENY";
+        h["Referrer-Policy"] = "no-referrer";
+        h["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=()";
+        h["Content-Security-Policy"] =
+            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; " +
+            "connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'";
+        if (ctx.Request.Path.StartsWithSegments("/api"))
+            h["Cache-Control"] = "no-store";   // datos de salud y sesión: nunca en caché
+        return Task.CompletedTask;
+    });
+    await next();
+});
 
 // Los errores de negocio (THROW 50000+) llegan al usuario con su mensaje en español.
 app.Use(async (ctx, next) =>
@@ -33,6 +67,7 @@ app.Use(async (ctx, next) =>
 
 app.UseDefaultFiles();
 app.UseStaticFiles();
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 

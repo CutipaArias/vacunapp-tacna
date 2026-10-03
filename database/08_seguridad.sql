@@ -231,3 +231,16 @@ BEGIN
     COMMIT TRANSACTION;
 END
 GO
+
+/* ---------------------------------------------------------------------
+   Bloqueo temporal por intentos fallidos (adición al spec, 03/10/2026):
+   la API cuenta los fallos consecutivos y, al llegar al máximo, fija
+   BloqueadoHasta. Se agregan con ALTER para que el script siga siendo
+   idempotente también sobre una base que ya tenga la tabla Usuario.
+   --------------------------------------------------------------------- */
+IF COL_LENGTH(N'vac.Usuario', N'IntentosFallidos') IS NULL
+    ALTER TABLE vac.Usuario ADD IntentosFallidos TINYINT NOT NULL CONSTRAINT DF_Usuario_Intentos DEFAULT (0);
+GO
+IF COL_LENGTH(N'vac.Usuario', N'BloqueadoHasta') IS NULL
+    ALTER TABLE vac.Usuario ADD BloqueadoHasta DATETIME2(0) NULL;
+GO

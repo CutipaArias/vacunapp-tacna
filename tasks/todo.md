@@ -54,7 +54,7 @@ Plan: [plan.md](plan.md) · Spec: [../SPEC.md](../SPEC.md)
   - Files: `panel/Auth/UsuariosEndpoints.cs`, `database/08_seguridad.sql` (SP `usp_CrearUsuario`), `panel/wwwroot/usuarios.html`, `tests/…/UsuariosTests.cs`
   - Deps: T1.3, T1.4
 
-- [ ] **T1.6 Revisión de seguridad del módulo** (S)
+- [x] **T1.6 Revisión de seguridad del módulo** (S)
   - Acceptance: checklist de /security-and-hardening aplicada: sin SQL concatenado, límites de intentos de login (bloqueo temporal tras 5 fallos), cabeceras de seguridad, sin secretos en el repo; hallazgos corregidos o documentados.
   - Verify: grep de concatenación SQL sin resultados; test de bloqueo tras 5 intentos
   - Files: `panel/Program.cs`, `docs/seguridad.md`

@@ -47,6 +47,7 @@ public sealed class AppFactory : WebApplicationFactory<Program>
             ["Seed:AdminPassword"] = ClaveAdmin,
             ["Seed:Password"] = ClaveGeneral,
             ["ConnectionStrings:VacunApp"] = CadenaConexion,
+            ["RateLimit:LoginPerMinute"] = "100000",   // la suite inicia muchas sesiones desde la misma IP
         }));
     }
 

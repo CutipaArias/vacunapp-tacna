@@ -105,7 +105,7 @@ function prepararRegistro(doc, pendientes) {
     $('#r-lote').innerHTML = cat.lotes.filter(l => l.Codigo === v).map(l => `<option>${esc(l.NumeroLote)}</option>`).join('');
   };
   const personal = () => {
-    $('#r-per').innerHTML = cat.personal.filter(p => p.IdEstablecimiento == $('#r-est').value).map(p => `<option value="${p.Dni}">${esc(p.Nombre)}</option>`).join('');
+    $('#r-per').innerHTML = cat.personal.filter(p => p.IdEstablecimiento == $('#r-est').value).map(p => `<option value="${esc(p.Dni)}">${esc(p.Nombre)}</option>`).join('');
   };
   $('#r-dosis').onchange = lotes; $('#r-est').onchange = personal; lotes(); personal();
   $('#r-fec').value = new Date().toISOString().slice(0, 10);
