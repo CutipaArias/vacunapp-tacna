@@ -57,7 +57,7 @@ no se reprodujo):
 |---|---|
 | Global (`@Top = 200`) | ≈ 0,5 s |
 | Por distrito / por vacuna | ≈ 0,4 s |
-| `@SoloZonaBrote = 1` | ≈ 4,3 s |
+| `@SoloZonaBrote = 1` | ≈ 4,3 s (medición inicial; **no se reproduce**, ≈ 0,5 s en la revisión de T5.1: ver abajo) |
 
 El último caso figuraba como **superior a la meta de 2 s (RNF-01)**. El tiempo se atribuyó a `fn_PendientesZonaBrote`,
 no al índice de dosis: se probó cambiar `IX_Dosis_Esquema` a `(IdEsquema, IdPaciente)` y no mejoró nada medible (se

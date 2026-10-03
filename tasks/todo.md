@@ -156,8 +156,8 @@ Plan: [plan.md](plan.md) · Spec: [../SPEC.md](../SPEC.md)
   - Files: `database/10_agenda.sql`, `panel/Agenda/AtencionEndpoints.cs`, `panel/wwwroot/index.html` + `panel.js` (pestaña «Citas del día»), `tests/…`
   - Deps: T4.2, T2.2, T3.2
 
-### Checkpoint D (agenda)
-- [ ] Prueba de concurrencia (1 de N) y rollback verdes; flujo reservar→atender de punta a punta; revisión contigo.
+### Checkpoint E (agenda) — aprobado 03/10/2026
+- [x] Prueba de concurrencia (1 de N) y rollback verdes; flujo reservar→atender de punta a punta; revisión contigo.
 
 ---
 ## Fase 5 – `vigilancia`
@@ -167,7 +167,7 @@ Plan: [plan.md](plan.md) · Spec: [../SPEC.md](../SPEC.md)
   - Incluye: `usp_ListarPendientes @SoloZonaBrote = 1` tarda ~4,3 s con 20 000 pacientes (meta RNF-01: < 2 s; ver `docs/capacidad.md`). Optimizar `fn_PendientesZonaBrote` y medir antes/después. **Resultado:** no se reproduce (≈0,5 s medido 03/10/2026, 3 corridas, con y sin filtros); no se reescribe la función y H47 queda como guarda; se vuelve a medir en MonsterASP con `desplegar-remoto.ps1 -Pruebas`.
   - Verify: pruebas BD RN-19/20; xUnit (vacunador → 403)
   - Files: `database/04_procedimientos.sql` (50024–50026, carrera 50022), `panel/Vigilancia/BrotesEndpoints.cs`, pestaña Brotes en `panel/wwwroot/index.html` y `panel.js`, `database/07_pruebas.sql` (H42–H47), `tests/VacunApp.Tests/BrotesTests.cs`
-  - Deps: Checkpoint D
+  - Deps: Checkpoint E
 
 - [ ] **T5.2 Alertas y pendientes por alcance (RF-11, RF-12, CU11)** (M)
   - Acceptance: alertas de brote, atraso, inasistencia y stock; vacunador/jefe ven su establecimiento, epidemiólogo toda la región; `usp_AtenderAlerta` accesible.
@@ -187,7 +187,7 @@ Plan: [plan.md](plan.md) · Spec: [../SPEC.md](../SPEC.md)
   - Files: `panel/Vigilancia/CampanasEndpoints.cs`, `panel/wwwroot/campanas.html`, `tests/…`
   - Deps: T5.3
 
-### Checkpoint E (vigilancia)
+### Checkpoint F (vigilancia)
 - [ ] Los 16 RF cubiertos; matriz RF→prueba completa; revisión contigo.
 
 ---
@@ -197,7 +197,7 @@ Plan: [plan.md](plan.md) · Spec: [../SPEC.md](../SPEC.md)
   - Acceptance: confirmo (con tus datos de acceso) versión de runtime .NET, límites reales y forma de ejecutar scripts; `00_crear_bd.sql` separado de los scripts idempotentes; plan de carga de datos que quepa en 1 GB.
   - Verify: scripts corren sin error dos veces contra la BD remota; el tamaño de datos queda < 1 GB
   - Files: `database/*.sql`, `desplegar.ps1` (modo `-Remoto`), `docs/despliegue.md`
-  - Deps: Checkpoint E · **Requiere que tú proporciones credenciales; yo no las introduzco en formularios ni las guardo en el repo**
+  - Deps: Checkpoint F · **Requiere que tú proporciones credenciales; yo no las introduzco en formularios ni las guardo en el repo**
 
 - [ ] **T6.2 Publicar la aplicación** (M)
   - Acceptance: `dotnet publish` generado; cadena de conexión y secretos fuera del repo (variables de entorno / `appsettings.Production.json` ignorado por git); app accesible por HTTPS; login funciona.

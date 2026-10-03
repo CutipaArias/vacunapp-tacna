@@ -80,12 +80,17 @@ public class BrotesTests(AppFactory app) : IAsyncLifetime
 
     static async Task<JsonElement> Json(HttpResponseMessage r) => await r.Content.ReadFromJsonAsync<JsonElement>();
 
-    async Task<int> Declarar(HttpClient c)
+    // Si falla, el mensaje trae el cuerpo de la respuesta: así una falla intermitente se explica sola.
+    static async Task<HttpResponseMessage> Exito(HttpResponseMessage r)
     {
-        var r = await c.PostAsJsonAsync("/api/brotes", Declaracion());
-        Assert.Equal(HttpStatusCode.OK, r.StatusCode);
-        return (await Json(r)).GetProperty("idBrote").GetInt32();
+        Assert.True(r.StatusCode == HttpStatusCode.OK, $"{(int)r.StatusCode}: {await r.Content.ReadAsStringAsync()}");
+        return r;
     }
+
+    async Task<int> Declarar(HttpClient c) =>
+        (await Json(await Exito(await c.PostAsJsonAsync("/api/brotes", Declaracion())))).GetProperty("idBrote").GetInt32();
+
+    static async Task Cerrar(HttpClient c, int idBrote) => await Exito(await c.PostAsJsonAsync($"/api/brotes/{idBrote}/cerrar", new { }));
 
     async Task<int> Pendientes(int idBrote) =>
         (int)(await Sql("SELECT COUNT(*) FROM vac.Alerta WHERE IdBrote = @b AND Estado = 'PENDIENTE'", ("@b", idBrote)))!;
@@ -144,8 +149,7 @@ public class BrotesTests(AppFactory app) : IAsyncLifetime
     public async Task Declarar_devuelve_cuantas_alertas_genero()
     {
         var c = await app.SesionComoAsync("epi01");
-        var r = await c.PostAsJsonAsync("/api/brotes", Declaracion());
-        Assert.Equal(HttpStatusCode.OK, r.StatusCode);
+        var r = await Exito(await c.PostAsJsonAsync("/api/brotes", Declaracion()));
         var j = await Json(r);
         var id = j.GetProperty("idBrote").GetInt32();
         var generadas = j.GetProperty("alertasGeneradas").GetInt32();
@@ -224,8 +228,7 @@ public class BrotesTests(AppFactory app) : IAsyncLifetime
         var id = await Declarar(c);
         Assert.True(await Pendientes(id) > 0, "Tarata debe tener dosis pendientes de rubéola");
 
-        var r = await c.PostAsJsonAsync($"/api/brotes/{id}/cerrar", new { });
-        Assert.Equal(HttpStatusCode.OK, r.StatusCode);
+        await Cerrar(c, id);
 
         Assert.Equal(0, await Pendientes(id));
         var lista = await Json(await c.GetAsync("/api/brotes"));
@@ -238,7 +241,7 @@ public class BrotesTests(AppFactory app) : IAsyncLifetime
     {
         var c = await app.SesionComoAsync("epi01");
         var id = await Declarar(c);
-        Assert.Equal(HttpStatusCode.OK, (await c.PostAsJsonAsync($"/api/brotes/{id}/cerrar", new { })).StatusCode);
+        await Cerrar(c, id);
 
         foreach (var idMalo in new[] { id, 2_000_000_000 })
         {
@@ -268,7 +271,7 @@ public class BrotesTests(AppFactory app) : IAsyncLifetime
     {
         var c = await app.SesionComoAsync("epi01");
         var primero = await Declarar(c);
-        Assert.Equal(HttpStatusCode.OK, (await c.PostAsJsonAsync($"/api/brotes/{primero}/cerrar", new { })).StatusCode);
+        await Cerrar(c, primero);
 
         var segundo = await Declarar(c);
         Assert.NotEqual(primero, segundo);
