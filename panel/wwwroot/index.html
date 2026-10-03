@@ -21,6 +21,7 @@
   <button data-tab="resumen" data-roles="ADMINISTRADOR EPIDEMIOLOGO" hidden>Resumen</button>
   <button data-tab="cobertura" data-roles="ADMINISTRADOR EPIDEMIOLOGO" hidden>Cobertura por distrito</button>
   <button data-tab="alertas" data-roles="ADMINISTRADOR EPIDEMIOLOGO" hidden>Alertas</button>
+  <button data-tab="brotes" data-roles="ADMINISTRADOR EPIDEMIOLOGO" hidden>Brotes</button>
   <button data-tab="campanas" data-roles="ADMINISTRADOR EPIDEMIOLOGO" hidden>Campañas</button>
   <button data-tab="paciente" data-roles="ADMINISTRADOR EPIDEMIOLOGO JEFE_ESTABLECIMIENTO VACUNADOR CIUDADANO" hidden>Paciente</button>
   <button data-tab="citas" data-roles="CIUDADANO VACUNADOR JEFE_ESTABLECIMIENTO" hidden>Citas</button>
@@ -65,6 +66,26 @@
         <button class="b" id="b-ale">Consultar</button>
       </div>
       <div class="tbl"><table id="ale"></table></div>
+    </div>
+  </section>
+
+  <section id="brotes">
+    <div class="card">
+      <h2>Brotes <span class="time" id="t-bro"></span></h2>
+      <p>Un solo brote activo por enfermedad y distrito. Al cerrar un brote se descartan sus alertas pendientes.</p>
+      <div class="tbl"><table id="bro-tbl"></table></div>
+      <div id="bro-msg" role="alert"></div>
+    </div>
+    <div class="card">
+      <h2>Declarar brote</h2>
+      <p>Genera una alerta por cada paciente del distrito con una dosis pendiente de una vacuna que previene la enfermedad.</p>
+      <form class="filters" id="f-bro" autocomplete="off">
+        <label>Enfermedad <select id="b-enf" required></select></label>
+        <label>Distrito <select id="b-dis" required></select></label>
+        <label>Inicio <input id="b-ini" type="date" required></label>
+        <label>Casos confirmados <input id="b-cas" type="number" min="0" max="32767" value="1" required></label>
+        <button class="b" type="submit">Declarar</button>
+      </form>
     </div>
   </section>
 

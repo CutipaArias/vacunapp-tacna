@@ -139,14 +139,25 @@ BEGIN
 
     IF @IdDistrito IS NULL   THROW 50020, 'Ubigeo no válido.', 1;
     IF @IdEnfermedad IS NULL THROW 50021, 'Enfermedad no registrada.', 1;
+    IF @CasosConfirmados < 0 THROW 50024, 'Los casos confirmados no pueden ser negativos.', 1;
+    IF @FechaInicio > CAST(GETDATE() AS DATE) THROW 50025, 'La fecha de inicio del brote no puede ser futura.', 1;
     IF EXISTS (SELECT 1 FROM vac.Brote WHERE IdDistrito = @IdDistrito AND IdEnfermedad = @IdEnfermedad AND FechaFin IS NULL)
         THROW 50022, 'Ya existe un brote activo de esa enfermedad en el distrito.', 1;
 
-    BEGIN TRANSACTION;
-        INSERT INTO vac.Brote (IdEnfermedad, IdDistrito, FechaInicio, CasosConfirmados)
-        VALUES (@IdEnfermedad, @IdDistrito, @FechaInicio, @CasosConfirmados);
-        SET @IdBrote = SCOPE_IDENTITY();
-    COMMIT;
+    -- RN-19: si dos declaraciones simultáneas pasan la comprobación anterior, el índice único
+    -- UX_Brote_Activo rechaza a la segunda; se informa con el mismo error 50022 y no como fallo interno.
+    BEGIN TRY
+        BEGIN TRANSACTION;
+            INSERT INTO vac.Brote (IdEnfermedad, IdDistrito, FechaInicio, CasosConfirmados)
+            VALUES (@IdEnfermedad, @IdDistrito, @FechaInicio, @CasosConfirmados);
+            SET @IdBrote = SCOPE_IDENTITY();
+        COMMIT;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK;
+        IF ERROR_NUMBER() IN (2601, 2627) THROW 50022, 'Ya existe un brote activo de esa enfermedad en el distrito.', 1;
+        THROW;
+    END CATCH;
 
     SELECT @AlertasGeneradas = COUNT(*) FROM vac.Alerta WHERE IdBrote = @IdBrote AND Estado = 'PENDIENTE';
 END
@@ -168,6 +179,8 @@ BEGIN
 
     IF NOT EXISTS (SELECT 1 FROM vac.Brote WHERE IdBrote = @IdBrote AND FechaFin IS NULL)
         THROW 50023, 'El brote no existe o ya está cerrado.', 1;
+    IF @FechaFin < (SELECT FechaInicio FROM vac.Brote WHERE IdBrote = @IdBrote)
+        THROW 50026, 'La fecha de cierre no puede ser anterior al inicio del brote.', 1;
 
     BEGIN TRANSACTION;
         UPDATE vac.Brote SET FechaFin = @FechaFin WHERE IdBrote = @IdBrote;

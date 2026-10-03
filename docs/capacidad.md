@@ -59,9 +59,17 @@ no se reprodujo):
 | Por distrito / por vacuna | ≈ 0,4 s |
 | `@SoloZonaBrote = 1` | ≈ 4,3 s |
 
-El último caso **supera la meta de 2 s (RNF-01)**. El tiempo se va en `fn_PendientesZonaBrote`, no en el índice de
-dosis: se probó cambiar `IX_Dosis_Esquema` a `(IdEsquema, IdPaciente)` y no mejoró nada medible (se descartó). Se
-resuelve en T5.1 (brotes), donde vive esa función; no se toca antes.
+El último caso figuraba como **superior a la meta de 2 s (RNF-01)**. El tiempo se atribuyó a `fn_PendientesZonaBrote`,
+no al índice de dosis: se probó cambiar `IX_Dosis_Esquema` a `(IdEsquema, IdPaciente)` y no mejoró nada medible (se
+descartó).
+
+**Revisión en T5.1 (03/10/2026):** la cifra de 4,3 s no se reproduce. Con los mismos 20 000 pacientes, tres brotes
+activos y la base en caliente, `usp_ListarPendientes @SoloZonaBrote = 1, @Top = 200` tarda ≈ 0,48 s (480, 472 y 503 ms),
+≈ 0,12–0,46 s por distrito, ≈ 0,46 s por vacuna y ≈ 0,57 s sin límite de filas; `fn_PendientesZonaBrote` sola, 37 ms
+(4 030 filas). Tampoco cambia con `SET ARITHABORT OFF` (la configuración de la aplicación .NET). No se reescribió la
+función: sin un caso lento reproducible sería optimizar a ciegas. El caso H47 de `database/07_pruebas.sql` mide este
+llamado y falla si supera 2 s; corre también en MonsterASP con `desplegar-remoto.ps1 -Pruebas`, que es donde
+interesa saber si el hosting compartido cambia el resultado.
 
 ## Reproducir
 Generador de carga temporal (no incluido en el repositorio): inicia sesión con los usuarios semilla y repite las consultas

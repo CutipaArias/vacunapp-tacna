@@ -25,7 +25,7 @@ const tag = v => `<span class="tag ${esc(v)}">${esc(v)}</span>`;
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
   document.querySelectorAll('nav button, section').forEach(x => x.classList.remove('on'));
   b.classList.add('on'); $('#' + b.dataset.tab).classList.add('on');
-  ({ cobertura: cargarCobertura, alertas: cargarAlertas, campanas: cargarCampanas, citas: cargarCitas, 'citas-dia': cargarCitasDia, stock: cargarStock, horarios: cargarHorarios, usuarios: cargarUsuarios, auditoria: cargarAuditoria })[b.dataset.tab]?.();
+  ({ cobertura: cargarCobertura, alertas: cargarAlertas, brotes: cargarBrotes, campanas: cargarCampanas, citas: cargarCitas, 'citas-dia': cargarCitasDia, stock: cargarStock, horarios: cargarHorarios, usuarios: cargarUsuarios, auditoria: cargarAuditoria })[b.dataset.tab]?.();
 });
 
 async function cargarResumen() {
@@ -119,8 +119,48 @@ function prepararRegistro(doc, pendientes) {
   };
 }
 
-// ---- Stock del establecimiento (solo JEFE_ESTABLECIMIENTO) ----
+// ---- Brotes (RF-10): declarar y cerrar, solo ADMINISTRADOR y EPIDEMIOLOGO ----
 const json = cuerpo => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo) });
+
+async function cargarBrotes() {
+  const r = await api('/api/brotes');
+  if (!$('#b-enf').options.length) $('#b-enf').innerHTML = r.enfermedades.map(e => `<option>${esc(e)}</option>`).join('');
+  $('#t-bro').textContent = `· ${r.brotes.filter(b => b.estado === 'ACTIVO').length} activos · ${r.__ms} ms`;
+  table($('#bro-tbl'), [
+    { h: 'Enfermedad', k: 'enfermedad' }, { h: 'Distrito', k: 'distrito' }, { h: 'Inicio', f: b => fecha(b.fechaInicio) }, { h: 'Cierre', f: b => fecha(b.fechaFin) },
+    { h: 'Casos', n: 1, f: b => fmt(b.casosConfirmados) }, { h: 'Alertas pendientes', n: 1, f: b => fmt(b.alertasPendientes) },
+    { h: 'Estado', f: b => tag(b.estado) },
+    { h: '', f: b => b.estado === 'ACTIVO' ? `<button class="b sec" data-id="${b.idBrote}">Cerrar</button>` : '' }
+  ], r.brotes);
+}
+
+function prepararBrotes() {
+  $('#b-dis').innerHTML = cat.distritos.map(d => `<option value="${esc(d.Ubigeo)}">${esc(d.Nombre)}</option>`).join('');
+  $('#b-ini').value = hoyISO(); $('#b-ini').max = hoyISO();
+  const aviso = (ok, t) => $('#bro-msg').innerHTML = `<div class="msg ${ok ? 'ok' : 'err'}">${esc(t)}</div>`;
+  $('#f-bro').onsubmit = async e => {
+    e.preventDefault();
+    const enf = $('#b-enf').value, dis = $('#b-dis').selectedOptions[0].textContent;
+    if (!confirm(`¿Declarar el brote de ${enf} en ${dis}? Se generarán alertas para los pacientes con dosis pendientes.`)) return;
+    try {
+      const r = await api('/api/brotes', json({ ubigeo: $('#b-dis').value, enfermedad: enf, fechaInicio: $('#b-ini').value, casosConfirmados: +$('#b-cas').value }));
+      aviso(true, `Brote declarado. Se generaron ${fmt(r.alertasGeneradas)} alertas.`);
+      await cargarBrotes();
+    } catch (err) { aviso(false, err.message); }
+  };
+  $('#bro-tbl').onclick = async e => {
+    const b = e.target.closest('button[data-id]');
+    if (!b) return;
+    if (!confirm('¿Cerrar este brote? Se descartarán sus alertas pendientes.')) return;
+    try {
+      const r = await api(`/api/brotes/${b.dataset.id}/cerrar`, json({}));
+      aviso(true, `Brote cerrado. Se descartaron ${fmt(r.alertasDescartadas)} alertas.`);
+      await cargarBrotes();
+    } catch (err) { aviso(false, err.message); }
+  };
+}
+
+// ---- Stock del establecimiento (solo JEFE_ESTABLECIMIENTO) ----
 const TIPOS_ALERTA = { STOCK_BAJO: 'Stock bajo', LOTE_POR_VENCER: 'Lote por vencer' };
 let stock = [];
 
@@ -537,6 +577,7 @@ async function init() {
     .map(e => `<option value="${e.IdEstablecimiento}">${esc(e.Nombre)} (${esc(e.Distrito)})</option>`).join('');
   $('#b-cob').onclick = cargarCobertura; $('#b-ale').onclick = cargarAlertas; $('#b-pac').onclick = buscarPaciente;
   $('#p-doc').onkeydown = e => { if (e.key === 'Enter') buscarPaciente(); };  // sin devolver false: cancelaría las teclas
+  if (tabs.includes('brotes')) prepararBrotes();
   if (tabs.includes('citas')) prepararCitas();
   if (tabs.includes('citas-dia')) prepararCitasDia();
   if (tabs.includes('stock')) prepararStock();

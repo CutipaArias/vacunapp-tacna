@@ -7,6 +7,7 @@ using VacunApp.Panel.Data;
 using VacunApp.Panel.Pacientes;
 using VacunApp.Panel.Agenda;
 using VacunApp.Panel.Stock;
+using VacunApp.Panel.Vigilancia;
 
 // Interfaz mínima de consulta de VacunApp Tacna.
 // Toda la lógica vive en la base de datos (vistas, procedimientos y triggers);
@@ -84,6 +85,7 @@ app.MapStock();
 app.MapHorarios();
 app.MapCitas();
 app.MapAtencion();
+app.MapBrotes();
 
 // RN-22: las consultas regionales son solo del epidemiólogo y el administrador.
 var regional = app.MapGroup("/api").RequireAuthorization(Politicas.Regional);

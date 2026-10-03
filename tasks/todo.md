@@ -162,11 +162,11 @@ Plan: [plan.md](plan.md) · Spec: [../SPEC.md](../SPEC.md)
 ---
 ## Fase 5 – `vigilancia`
 
-- [ ] **T5.1 Brotes: declarar/cerrar con autorización (RF-10, CU10, RN-19/20)** (M)
+- [x] **T5.1 Brotes: declarar/cerrar con autorización (RF-10, CU10, RN-19/20)** (M)
   - Acceptance: solo epidemiólogo/admin; un solo brote activo por enfermedad y distrito (índice único filtrado); declarar genera alertas de pendientes y devuelve cuántas.
-  - Incluye: `usp_ListarPendientes @SoloZonaBrote = 1` tarda ~4,3 s con 20 000 pacientes (meta RNF-01: < 2 s; ver `docs/capacidad.md`). Optimizar `fn_PendientesZonaBrote` y medir antes/después.
+  - Incluye: `usp_ListarPendientes @SoloZonaBrote = 1` tarda ~4,3 s con 20 000 pacientes (meta RNF-01: < 2 s; ver `docs/capacidad.md`). Optimizar `fn_PendientesZonaBrote` y medir antes/después. **Resultado:** no se reproduce (≈0,5 s medido 03/10/2026, 3 corridas, con y sin filtros); no se reescribe la función y H47 queda como guarda; se vuelve a medir en MonsterASP con `desplegar-remoto.ps1 -Pruebas`.
   - Verify: pruebas BD RN-19/20; xUnit (vacunador → 403)
-  - Files: `panel/Vigilancia/BrotesEndpoints.cs`, `panel/wwwroot/brotes.html`, `database/07_pruebas.sql`, `tests/…`
+  - Files: `database/04_procedimientos.sql` (50024–50026, carrera 50022), `panel/Vigilancia/BrotesEndpoints.cs`, pestaña Brotes en `panel/wwwroot/index.html` y `panel.js`, `database/07_pruebas.sql` (H42–H47), `tests/VacunApp.Tests/BrotesTests.cs`
   - Deps: Checkpoint D
 
 - [ ] **T5.2 Alertas y pendientes por alcance (RF-11, RF-12, CU11)** (M)

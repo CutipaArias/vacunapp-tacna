@@ -940,6 +940,7 @@ INSERT @R VALUES ('usp_ActualizarHorario', 'Rechaza un cupo menor que las citas 
 
 /* =================== Agenda: cancelar y reprogramar (RF-06; RN-16, RN-17) =================== */
 DECLARE @En23h DATETIME2(0) = DATEADD(HOUR, 23, SYSDATETIME()), @En25h DATETIME2(0) = DATEADD(HOUR, 25, SYSDATETIME());
+DECLARE @FechaAyer DATE = DATEADD(DAY, -1, @Hoy), @FechaManana DATE = DATEADD(DAY, 1, @Hoy);
 
 /* H21. RN-16: no se cancela con menos de 24 horas */
 BEGIN TRANSACTION;
@@ -1234,6 +1235,67 @@ EXEC vac.usp_RegistrarDosis '89050001', 'SPR', 1, @LoteSPR, @Est, @Dni, NULL, NU
 SET @Err = (SELECT Estado FROM vac.Alerta WHERE IdPaciente = @IdPac AND IdEsquema = @IdSPR1 AND TipoAlerta = 'INASISTENCIA');
 IF @@TRANCOUNT > 0 ROLLBACK;
 INSERT @R VALUES ('usp_RegistrarInasistencia', 'Aplicar la dosis cierra la alerta de inasistencia', 'ATENDIDA', @Err);
+
+/* =================== Vigilancia: brotes (RF-10; RN-19, RN-20) =================== */
+
+/* H42. Declarar un brote con casos negativos da un error propio, no un CHECK */
+BEGIN TRANSACTION;
+BEGIN TRY
+    EXEC vac.usp_DeclararBrote '230401', 'Rubéola', @Hoy, -1, @IdBrote OUTPUT, @n OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_DeclararBrote', 'Rechaza casos confirmados negativos', '50024', @Err);
+
+/* H43. Un brote no puede empezar en el futuro */
+BEGIN TRANSACTION;
+BEGIN TRY
+    EXEC vac.usp_DeclararBrote '230401', 'Rubéola', @FechaManana, 1, @IdBrote OUTPUT, @n OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_DeclararBrote', 'Rechaza una fecha de inicio futura', '50025', @Err);
+
+/* H44. El cierre no puede ser anterior al inicio */
+BEGIN TRANSACTION;
+EXEC vac.usp_DeclararBrote '230401', 'Rubéola', @Hoy, 1, @IdBrote OUTPUT, @n OUTPUT;
+BEGIN TRY
+    EXEC vac.usp_CerrarBrote @IdBrote, @FechaAyer;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_CerrarBrote', 'Rechaza un cierre anterior al inicio', '50026', @Err);
+
+/* H45. Un brote ya cerrado no se cierra otra vez */
+BEGIN TRANSACTION;
+EXEC vac.usp_DeclararBrote '230401', 'Rubéola', @Hoy, 1, @IdBrote OUTPUT, @n OUTPUT;
+EXEC vac.usp_CerrarBrote @IdBrote;
+BEGIN TRY
+    EXEC vac.usp_CerrarBrote @IdBrote;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_CerrarBrote', 'Rechaza cerrar un brote ya cerrado', '50023', @Err);
+
+/* H46. RN-19: tras cerrar un brote se puede declarar otro de la misma enfermedad y distrito */
+BEGIN TRANSACTION;
+EXEC vac.usp_DeclararBrote '230401', 'Rubéola', @Hoy, 1, @IdBrote OUTPUT, @n OUTPUT;
+EXEC vac.usp_CerrarBrote @IdBrote;
+BEGIN TRY
+    EXEC vac.usp_DeclararBrote '230401', 'Rubéola', @Hoy, 2, @IdAux OUTPUT, @n OUTPUT;
+    SET @Err = IIF(@IdAux <> @IdBrote, 'OK', 'mismo brote');
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_DeclararBrote', 'RN-19: tras cerrar se puede declarar uno nuevo', 'OK', @Err);
+
+/* H47. RNF-01: listar los pendientes de las zonas de brote tarda menos de 2 s con 20 000 pacientes */
+CREATE TABLE #lp (NumeroDocumento VARCHAR(20), Paciente NVARCHAR(200), EdadMeses INT, Telefono VARCHAR(20), Distrito NVARCHAR(100),
+                  CodigoVacuna VARCHAR(10), NumeroDosis INT, Dosis NVARCHAR(100), MesesAtraso INT);
+DECLARE @t0 DATETIME2(7) = SYSDATETIME();
+INSERT #lp EXEC vac.usp_ListarPendientes @SoloZonaBrote = 1, @Top = 200;
+SET @n = DATEDIFF(MILLISECOND, @t0, SYSDATETIME());
+DROP TABLE #lp;
+INSERT @R VALUES ('usp_ListarPendientes', 'RNF-01: pendientes en zona de brote en menos de 2 s', 'CUMPLE', IIF(@n < 2000, 'CUMPLE', CONCAT(@n, ' ms')));
 
 SELECT Caso, IIF(Esperado = Obtenido, 'OK', 'FALLA') AS Resultado, Objeto, Prueba, Esperado, Obtenido
 FROM @R ORDER BY Caso;
