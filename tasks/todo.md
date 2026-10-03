@@ -90,8 +90,14 @@ Plan: [plan.md](plan.md) · Spec: [../SPEC.md](../SPEC.md)
   - Files: `panel/Program.cs`, `panel/wwwroot/auditoria.html`, `tests/…`
   - Deps: T2.2
 
-### Checkpoint B (registro)
-- [ ] 0 dosis inválidas insertables por SP ni por INSERT directo; todo verde; revisión contigo.
+- [ ] **T2.5 Contexto de sesión en correcciones/eliminaciones de dosis (RN-23)** (S) — se ejecuta cuando exista el primer endpoint que corrija o elimine dosis
+  - Acceptance: todo endpoint que haga UPDATE/DELETE sobre `vac.DosisAplicada` ejecuta `sp_set_session_context N'usuario'` con el usuario de la sesión en la misma conexión y antes de la operación; la fila de auditoría muestra ese usuario y no `sa`.
+  - Verify: xUnit por cada endpoint de ese tipo: tras la operación, `GET /api/auditoria` muestra el usuario de la sesión
+  - Files: `panel/Program.cs` (`Db`), endpoint nuevo, `tests/…`
+  - Deps: T2.4
+
+### Checkpoint B (registro) — aprobado 03/10/2026
+- [x] 0 dosis inválidas insertables por SP ni por INSERT directo; todo verde; revisión contigo.
 
 ---
 ## Fase 3 – `stock`
