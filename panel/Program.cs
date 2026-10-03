@@ -75,6 +75,7 @@ app.UseAuthorization();
 app.MapAutenticacion();
 app.MapUsuarios();
 app.MapPacientes();
+app.MapDosis();
 
 // RN-22: consultas regionales (epidemiólogo y administrador) y consultas clínicas (más jefe y vacunador).
 var regional = app.MapGroup("/api").RequireAuthorization(Politicas.Regional);
@@ -138,22 +139,9 @@ app.MapGet("/api/catalogos", async (ClaimsPrincipal user) =>
     return Results.Ok(new { distritos = r[0], esquema = r[1], establecimientos = r[2], personal = r[3], lotes = r[4] });
 });
 
-app.MapPost("/api/dosis", async (NuevaDosis d, ClaimsPrincipal user) =>
-{
-    if (!Alcance.PuedeEstablecimiento(user, d.IdEstablecimiento)) return Results.Forbid();   // RN-22
-
-    var idDosis = new SqlParameter("@IdDosis", SqlDbType.BigInt) { Direction = ParameterDirection.Output };
-    await db.ExecAsync("vac.usp_RegistrarDosis",
-        ("@NumeroDocumento", d.Documento), ("@CodigoVacuna", d.Vacuna), ("@NumeroDosis", d.Dosis),
-        ("@NumeroLote", d.Lote), ("@IdEstablecimiento", d.IdEstablecimiento), ("@DniVacunador", d.DniVacunador),
-        ("@FechaAplicacion", d.Fecha), ("@IdCampana", null), ("@IdDosis", idDosis));
-    return Results.Ok(new { idDosis = idDosis.Value });
-}).RequireAuthorization(Politicas.Vacunador);
-
 
 app.Run();
 
-record NuevaDosis(string Documento, string Vacuna, byte Dosis, string Lote, short IdEstablecimiento, string DniVacunador, DateOnly? Fecha);
 
 sealed class Db(string connectionString)
 {

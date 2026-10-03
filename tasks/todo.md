@@ -72,7 +72,7 @@ Plan: [plan.md](plan.md) · Spec: [../SPEC.md](../SPEC.md)
   - Files: `panel/Program.cs`, `panel/Pacientes/PacientesEndpoints.cs`, `panel/wwwroot/pacientes.html`, `tests/…`
   - Deps: Checkpoint A
 
-- [ ] **T2.2 Registrar dosis aplicada por API/UI (RF-04, CU04)** (M)
+- [x] **T2.2 Registrar dosis aplicada por API/UI (RF-04, CU04)** (M)
   - Acceptance: vacunador registra dosis de su establecimiento (RN-22); el trigger `trg_DosisAplicada_Validar` cubre RN-03…RN-09 y devuelve el motivo; la UI lista las dosis elegibles del paciente.
   - Verify: xUnit por regla (edad mínima/máxima, dosis previa, intervalo, lote vencido, vacunador inactivo/otro establecimiento); pruebas BD RN-03…RN-09
   - Files: `database/04_procedimientos.sql`, `database/05_triggers.sql`, `panel/Pacientes/DosisEndpoints.cs`, `panel/wwwroot/dosis.html`, `tests/…`

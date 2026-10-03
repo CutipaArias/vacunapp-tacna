@@ -214,6 +214,21 @@ BEGIN TRY
 END TRY BEGIN CATCH SET @Err = ERROR_MESSAGE(); END CATCH;
 INSERT @R VALUES ('usp_ListarPendientes', 'Pendientes en zona de brote', 'OK', @Err);
 
+/* N9. Vacunador inactivo, con INSERT directo (RN-09: el trigger también debe cubrirlo) */
+BEGIN TRANSACTION;
+BEGIN TRY
+    DECLARE @PacN9 INT;
+    EXEC vac.usp_RegistrarPaciente 'DNI', '89000009', 'Prueba', 'Nueve', NULL, @Nac20m, 'M', '230104', NULL, NULL, @PacN9 OUTPUT;
+    UPDATE vac.Vacunador SET Activo = 0 WHERE IdVacunador = @IdVacunador;
+    INSERT INTO vac.DosisAplicada (IdPaciente, IdEsquema, IdLote, IdEstablecimiento, IdVacunador, FechaAplicacion)
+    VALUES (@PacN9, @IdSPR1, (SELECT TOP (1) l.IdLote FROM vac.LoteVacuna l JOIN vac.EsquemaDosis e ON e.IdVacuna = l.IdVacuna
+                              WHERE e.IdEsquema = @IdSPR1 AND l.FechaVencimiento >= @Hoy ORDER BY l.FechaVencimiento DESC),
+            @Est, @IdVacunador, @Hoy);
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('trg_DosisAplicada_Validar', 'Rechaza vacunador inactivo con INSERT directo', '50106', @Err);
+
 /* =================== Módulo identidad (08_seguridad.sql) =================== */
 
 /* S1. Los cinco roles existen */

@@ -16,7 +16,7 @@ GO
      - la fecha no es futura ni anterior al nacimiento;
      - la edad del paciente está dentro de la ventana del esquema;
      - la dosis anterior existe y se respetó el intervalo mínimo;
-     - el vacunador pertenece al establecimiento.
+     - el vacunador pertenece al establecimiento y está activo (RN-09).
    Si alguna falla, THROW revierte toda la transacción.
    --------------------------------------------------------------------- */
 CREATE OR ALTER TRIGGER vac.trg_DosisAplicada_Validar
@@ -74,6 +74,14 @@ BEGIN
                JOIN vac.Vacunador ps ON ps.IdVacunador = i.IdVacunador
                WHERE ps.IdEstablecimiento <> i.IdEstablecimiento)
         THROW 50105, 'El vacunador no pertenece al establecimiento indicado.', 1;
+
+    /* RN-09: solo se registra con vacunadores activos (en una corrección posterior no se vuelve a exigir) */
+    IF NOT EXISTS (SELECT 1 FROM deleted)
+       AND EXISTS (SELECT 1
+                   FROM inserted i
+                   JOIN vac.Vacunador ps ON ps.IdVacunador = i.IdVacunador
+                   WHERE ps.Activo = 0)
+        THROW 50106, 'El vacunador está inactivo.', 1;
 END
 GO
 EXEC sp_settriggerorder @triggername = N'vac.trg_DosisAplicada_Validar', @order = N'First', @stmttype = N'INSERT';

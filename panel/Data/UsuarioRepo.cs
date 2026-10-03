@@ -64,6 +64,18 @@ sealed class UsuarioRepo(Db db)
         db.QueryAsync("UPDATE vac.Usuario SET ClaveHash = @Hash WHERE IdUsuario = @Id",
             ("@Hash", hash), ("@Id", idUsuario));
 
+    /// <summary>DNI del vacunador (personal activo) asociado al usuario; null si no tiene o está inactivo.</summary>
+    public async Task<string?> DniVacunadorAsync(int idUsuario)
+    {
+        var r = await db.QueryAsync(
+            """
+            SELECT v.Dni FROM vac.Usuario u JOIN vac.Vacunador v ON v.IdVacunador = u.IdVacunador
+            WHERE u.IdUsuario = @Id AND u.Activo = 1 AND v.Activo = 1
+            """,
+            ("@Id", idUsuario));
+        return r[0].FirstOrDefault()?["Dni"] as string;
+    }
+
     /// <summary>Listado para administración. Nunca incluye ClaveHash.</summary>
     public async Task<List<UsuarioFila>> ListarAsync() =>
         (await db.QueryAsync(

@@ -104,17 +104,14 @@ function prepararRegistro(doc, pendientes) {
     const v = $('#r-dosis').value.split('|')[0];
     $('#r-lote').innerHTML = cat.lotes.filter(l => l.Codigo === v).map(l => `<option>${esc(l.NumeroLote)}</option>`).join('');
   };
-  const personal = () => {
-    $('#r-per').innerHTML = cat.personal.filter(p => p.IdEstablecimiento == $('#r-est').value).map(p => `<option value="${esc(p.Dni)}">${esc(p.Nombre)}</option>`).join('');
-  };
-  $('#r-dosis').onchange = lotes; $('#r-est').onchange = personal; lotes(); personal();
+  $('#r-dosis').onchange = lotes; lotes();
   $('#r-fec').value = new Date().toISOString().slice(0, 10);
   $('#b-reg').onclick = async () => {
     const [vacuna, dosis] = $('#r-dosis').value.split('|');
     try {
       const r = await api('/api/dosis', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
         documento: doc, vacuna, dosis: +dosis, lote: $('#r-lote').value, idEstablecimiento: +$('#r-est').value,
-        dniVacunador: $('#r-per').value, fecha: $('#r-fec').value || null }) });
+        fecha: $('#r-fec').value || null }) });
       await buscarPaciente();
       $('#r-msg').innerHTML = `<div class="msg ok">Dosis registrada (Id ${r.idDosis}). Las alertas asociadas se cerraron automáticamente.</div>`;
     } catch (e) { $('#r-msg').innerHTML = `<div class="msg err">${esc(e.message)}</div>`; }

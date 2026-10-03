@@ -100,12 +100,11 @@
     </div>
     <div class="card" id="reg" hidden>
       <h2>Registrar dosis</h2>
-      <p>Llama a <code>vac.usp_RegistrarDosis</code>. El trigger de validación rechaza dosis fuera de edad, sin la dosis previa o con lote vencido.</p>
+      <p>Se registra a su nombre y en su establecimiento. La base rechaza dosis fuera de edad, sin la dosis previa, sin respetar el intervalo o con lote vencido.</p>
       <div class="filters">
         <label>Dosis pendiente <select id="r-dosis"></select></label>
         <label>Lote <select id="r-lote"></select></label>
         <label>Establecimiento <select id="r-est"></select></label>
-        <label>Vacunador <select id="r-per"></select></label>
         <label>Fecha <input type="date" id="r-fec"></label>
         <button class="b" id="b-reg">Registrar</button>
       </div>
