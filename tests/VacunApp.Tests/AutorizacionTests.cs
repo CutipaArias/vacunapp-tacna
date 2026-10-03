@@ -65,19 +65,6 @@ public class AutorizacionTests(AppFactory app)
         Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
     }
 
-    [Theory]
-    [InlineData("admin", HttpStatusCode.OK)]
-    [InlineData("epi01", HttpStatusCode.OK)]
-    [InlineData("jefe01", HttpStatusCode.OK)]
-    [InlineData("vac01", HttpStatusCode.OK)]
-    [InlineData("ciud01", HttpStatusCode.Forbidden)]
-    public async Task El_carne_de_un_paciente_no_esta_abierto_al_ciudadano(string usuario, HttpStatusCode esperado)
-    {
-        var c = await app.SesionComoAsync(usuario);
-
-        Assert.Equal(esperado, (await c.GetAsync("/api/paciente/70000001")).StatusCode);
-    }
-
     [Fact]
     public async Task Catalogos_del_vacunador_solo_incluye_personal_de_su_establecimiento()
     {

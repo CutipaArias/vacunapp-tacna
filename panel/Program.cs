@@ -76,10 +76,10 @@ app.MapAutenticacion();
 app.MapUsuarios();
 app.MapPacientes();
 app.MapDosis();
+app.MapCarne();
 
-// RN-22: consultas regionales (epidemiólogo y administrador) y consultas clínicas (más jefe y vacunador).
+// RN-22: las consultas regionales son solo del epidemiólogo y el administrador.
 var regional = app.MapGroup("/api").RequireAuthorization(Politicas.Regional);
-var clinica = app.MapGroup("/api").RequireAuthorization(Politicas.ConsultaClinica);
 await SeedUsuarios.EjecutarAsync(
     app.Services.GetRequiredService<UsuarioRepo>(),
     app.Services.GetRequiredService<IPasswordHasher<CuentaUsuario>>(),
@@ -113,12 +113,6 @@ regional.MapGet("/pendientes", async (string? ubigeo, string? vacuna, bool? solo
 
 regional.MapGet("/campanas", async () =>
     Results.Ok((await db.QueryAsync("SELECT * FROM vac.vw_AvanceCampana ORDER BY IdCampana, PorcentajeAvance"))[0]));
-
-clinica.MapGet("/paciente/{documento}", async (string documento) =>
-{
-    var r = await db.ExecAsync("vac.usp_HistorialPaciente", ("@NumeroDocumento", documento));
-    return Results.Ok(new { datos = r[0].FirstOrDefault(), aplicadas = r[1], pendientes = r[2] });
-});
 
 app.MapGet("/api/catalogos", async (ClaimsPrincipal user) =>
 {

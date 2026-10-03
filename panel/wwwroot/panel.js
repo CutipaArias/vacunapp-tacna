@@ -118,6 +118,23 @@ function prepararRegistro(doc, pendientes) {
   };
 }
 
+// ---- Ciudadano: solo ve el carné de los hijos vinculados a su usuario (RN-17) ----
+async function prepararHijos() {
+  $('#p-filtro').hidden = true;   // el ciudadano no busca por DNI: elige entre sus hijos
+  const hijos = await api('/api/mis-pacientes');
+  const caja = $('#hijos');
+  caja.hidden = false;
+  if (!hijos.length) { caja.innerHTML = '<div class="msg ok">Aún no tiene hijos vinculados a su cuenta. Pida al establecimiento que los vincule.</div>'; return; }
+  caja.innerHTML = hijos.map(h => `<button class="b sec" data-doc="${esc(h.numeroDocumento)}">${esc(h.nombre)} <small class="muted">(${esc(h.parentesco)})</small></button>`).join('');
+  caja.onclick = e => {
+    const b = e.target.closest('button[data-doc]');
+    if (!b) return;
+    $('#p-doc').value = b.dataset.doc;
+    buscarPaciente();
+  };
+  caja.querySelector('button').click();
+}
+
 // ---- Alta de pacientes (solo VACUNADOR; el servidor lo vuelve a exigir) ----
 function prepararAltaPaciente() {
   $('#npac').hidden = false;
@@ -231,6 +248,7 @@ async function init() {
   $('#p-doc').onkeydown = e => e.key === 'Enter' && buscarPaciente();
   if (tabs.includes('usuarios')) prepararUsuarios();
   if (yo.rol === 'VACUNADOR') prepararAltaPaciente();
+  if (yo.rol === 'CIUDADANO') await prepararHijos();
 
   document.querySelector(`nav button[data-tab="${tabs[0]}"]`).click();
   if (tabs[0] === 'resumen') await cargarResumen();

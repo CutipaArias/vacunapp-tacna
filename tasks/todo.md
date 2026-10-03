@@ -78,7 +78,7 @@ Plan: [plan.md](plan.md) · Spec: [../SPEC.md](../SPEC.md)
   - Files: `database/04_procedimientos.sql`, `database/05_triggers.sql`, `panel/Pacientes/DosisEndpoints.cs`, `panel/wwwroot/dosis.html`, `tests/…`
   - Deps: T2.1
 
-- [ ] **T2.3 Carné de vacunación (RF-15, CU14)** (S)
+- [x] **T2.3 Carné de vacunación (RF-15, CU14)** (S)
   - Acceptance: vacunador ve cualquier paciente de su establecimiento; ciudadano solo los vinculados (RN-17); dosis aplicadas y pendientes.
   - Verify: xUnit: ciudadano consultando paciente ajeno → 403
   - Files: `panel/Pacientes/CarneEndpoints.cs`, `panel/wwwroot/carne.html`, `tests/…`

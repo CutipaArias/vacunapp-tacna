@@ -21,6 +21,7 @@ static class Politicas
     public const string ConsultaClinica = nameof(ConsultaClinica);
     public const string Vacunador = nameof(Vacunador);
     public const string Administrador = nameof(Administrador);
+    public const string Ciudadano = nameof(Ciudadano);
 
     public static void Configurar(AuthorizationOptions o)
     {
@@ -30,6 +31,7 @@ static class Politicas
         o.AddPolicy(ConsultaClinica, p => p.RequireRole(Roles.Administrador, Roles.Epidemiologo, Roles.Jefe, Roles.Vacunador));
         o.AddPolicy(Vacunador, p => p.RequireRole(Roles.Vacunador));
         o.AddPolicy(Administrador, p => p.RequireRole(Roles.Administrador));
+        o.AddPolicy(Ciudadano, p => p.RequireRole(Roles.Ciudadano));
     }
 }
 

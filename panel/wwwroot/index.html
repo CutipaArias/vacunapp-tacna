@@ -22,7 +22,7 @@
   <button data-tab="cobertura" data-roles="ADMINISTRADOR EPIDEMIOLOGO" hidden>Cobertura por distrito</button>
   <button data-tab="alertas" data-roles="ADMINISTRADOR EPIDEMIOLOGO" hidden>Alertas</button>
   <button data-tab="campanas" data-roles="ADMINISTRADOR EPIDEMIOLOGO" hidden>Campañas</button>
-  <button data-tab="paciente" data-roles="ADMINISTRADOR EPIDEMIOLOGO JEFE_ESTABLECIMIENTO VACUNADOR" hidden>Paciente</button>
+  <button data-tab="paciente" data-roles="ADMINISTRADOR EPIDEMIOLOGO JEFE_ESTABLECIMIENTO VACUNADOR CIUDADANO" hidden>Paciente</button>
   <button data-tab="usuarios" data-roles="ADMINISTRADOR" hidden>Usuarios</button>
 </nav>
 <main>
@@ -74,7 +74,8 @@
   <section id="paciente">
     <div class="card">
       <h2>Carné de vacunación</h2>
-      <div class="filters">
+      <div id="hijos" class="filters" hidden></div>
+      <div class="filters" id="p-filtro">
         <label>DNI <input id="p-doc" placeholder="70000001" maxlength="12"></label>
         <button class="b" id="b-pac">Buscar</button>
       </div>
