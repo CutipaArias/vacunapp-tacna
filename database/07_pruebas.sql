@@ -418,6 +418,169 @@ END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
 IF @@TRANCOUNT > 0 ROLLBACK;
 INSERT @R VALUES ('usp_ActualizarUsuario', 'Reasigna un jefe a otro establecimiento', 'OK', @Err);
 
+/* =================== Stock (módulo stock: RN-10…RN-13) =================== */
+
+/* K1. Una existencia no puede ser negativa */
+BEGIN TRANSACTION;
+BEGIN TRY
+    UPDATE s SET Cantidad = -1 FROM vac.StockLote s JOIN vac.LoteVacuna l ON l.IdLote = s.IdLote
+    WHERE l.NumeroLote = @LoteSPR AND s.IdEstablecimiento = @Est;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('StockLote', 'CHECK: la cantidad no puede ser negativa', '547', @Err);
+
+/* K2. El umbral mínimo no puede ser negativo */
+BEGIN TRANSACTION;
+BEGIN TRY
+    UPDATE s SET UmbralMinimo = -5 FROM vac.StockLote s JOIN vac.LoteVacuna l ON l.IdLote = s.IdLote
+    WHERE l.NumeroLote = @LoteSPR AND s.IdEstablecimiento = @Est;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('StockLote', 'CHECK: el umbral no puede ser negativo', '547', @Err);
+
+/* K3. Un lote tiene una sola fila por establecimiento */
+BEGIN TRANSACTION;
+BEGIN TRY
+    INSERT vac.StockLote (IdLote, IdEstablecimiento, Cantidad, UmbralMinimo)
+    SELECT s.IdLote, s.IdEstablecimiento, 10, 5
+    FROM vac.StockLote s JOIN vac.LoteVacuna l ON l.IdLote = s.IdLote
+    WHERE l.NumeroLote = @LoteSPR AND s.IdEstablecimiento = @Est;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('StockLote', 'UNIQUE: lote y establecimiento no se repiten', '2627', @Err);
+
+/* K4. Un movimiento de ENTRADA no puede restar */
+BEGIN TRANSACTION;
+BEGIN TRY
+    INSERT vac.MovimientoStock (IdStock, Tipo, Cantidad, Motivo)
+    SELECT TOP (1) IdStock, 'ENTRADA', -3, 'prueba' FROM vac.StockLote;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('MovimientoStock', 'CHECK: el signo debe corresponder al tipo', '547', @Err);
+
+/* D1. RN-10: cada dosis descuenta una unidad y deja un movimiento SALIDA */
+BEGIN TRANSACTION;
+BEGIN TRY
+    UPDATE s SET Cantidad = 100, UmbralMinimo = 10 FROM vac.StockLote s JOIN vac.LoteVacuna l ON l.IdLote = s.IdLote
+    WHERE l.NumeroLote = @LoteSPR AND s.IdEstablecimiento = @Est;
+    EXEC vac.usp_RegistrarPaciente 'DNI', '89000001', 'Prueba', 'Uno', NULL, @Nac20m, 'M', '230104', NULL, NULL, @IdPac OUTPUT;
+    EXEC vac.usp_RegistrarDosis '89000001', 'SPR', 1, @LoteSPR, @Est, @Dni, NULL, NULL, @IdDosis OUTPUT;
+    SET @Err = CONCAT(
+        (SELECT s.Cantidad FROM vac.StockLote s JOIN vac.LoteVacuna l ON l.IdLote = s.IdLote WHERE l.NumeroLote = @LoteSPR AND s.IdEstablecimiento = @Est),
+        '/',
+        (SELECT COUNT(*) FROM vac.MovimientoStock WHERE IdDosis = @IdDosis AND Tipo = 'SALIDA' AND Cantidad = -1));
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('trg_DosisAplicada_DescontarStock', 'RN-10: descuenta 1 y registra el movimiento', '99/1', @Err);
+
+/* D2. RN-11: con stock cero no se aplica la dosis */
+BEGIN TRANSACTION;
+BEGIN TRY
+    UPDATE s SET Cantidad = 0 FROM vac.StockLote s JOIN vac.LoteVacuna l ON l.IdLote = s.IdLote
+    WHERE l.NumeroLote = @LoteSPR AND s.IdEstablecimiento = @Est;
+    EXEC vac.usp_RegistrarPaciente 'DNI', '89000001', 'Prueba', 'Uno', NULL, @Nac20m, 'M', '230104', NULL, NULL, @IdPac OUTPUT;
+    EXEC vac.usp_RegistrarDosis '89000001', 'SPR', 1, @LoteSPR, @Est, @Dni, NULL, NULL, @IdDosis OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('trg_DosisAplicada_DescontarStock', 'RN-11: rechaza la dosis con stock cero', '50107', @Err);
+
+/* D3. RN-11: un lote sin existencias registradas en el establecimiento tampoco se aplica */
+BEGIN TRANSACTION;
+BEGIN TRY
+    DELETE m FROM vac.MovimientoStock m JOIN vac.StockLote s ON s.IdStock = m.IdStock JOIN vac.LoteVacuna l ON l.IdLote = s.IdLote
+    WHERE l.NumeroLote = @LoteSPR AND s.IdEstablecimiento = @Est;
+    DELETE s FROM vac.StockLote s JOIN vac.LoteVacuna l ON l.IdLote = s.IdLote
+    WHERE l.NumeroLote = @LoteSPR AND s.IdEstablecimiento = @Est;
+    EXEC vac.usp_RegistrarPaciente 'DNI', '89000001', 'Prueba', 'Uno', NULL, @Nac20m, 'M', '230104', NULL, NULL, @IdPac OUTPUT;
+    EXEC vac.usp_RegistrarDosis '89000001', 'SPR', 1, @LoteSPR, @Est, @Dni, NULL, NULL, @IdDosis OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('trg_DosisAplicada_DescontarStock', 'RN-11: rechaza si el establecimiento no tiene el lote', '50107', @Err);
+
+/* D4. RN-12: al llegar al umbral se genera una sola alerta de stock bajo */
+BEGIN TRANSACTION;
+BEGIN TRY
+    UPDATE s SET Cantidad = 11, UmbralMinimo = 10 FROM vac.StockLote s JOIN vac.LoteVacuna l ON l.IdLote = s.IdLote
+    WHERE l.NumeroLote = @LoteSPR AND s.IdEstablecimiento = @Est;
+    SELECT @n = COUNT(*) FROM vac.Alerta a JOIN vac.StockLote s ON s.IdStock = a.IdStock JOIN vac.LoteVacuna l ON l.IdLote = s.IdLote
+    WHERE l.NumeroLote = @LoteSPR AND s.IdEstablecimiento = @Est AND a.Estado = 'PENDIENTE';
+    EXEC vac.usp_RegistrarPaciente 'DNI', '89000001', 'Prueba', 'Uno', NULL, @Nac20m, 'M', '230104', NULL, NULL, @IdPac OUTPUT;
+    EXEC vac.usp_RegistrarDosis '89000001', 'SPR', 1, @LoteSPR, @Est, @Dni, NULL, NULL, @IdDosis OUTPUT;
+    UPDATE s SET Cantidad = 9 FROM vac.StockLote s JOIN vac.LoteVacuna l ON l.IdLote = s.IdLote
+    WHERE l.NumeroLote = @LoteSPR AND s.IdEstablecimiento = @Est;
+    SET @Err = CONCAT(@n, '/', (SELECT COUNT(*) FROM vac.Alerta a JOIN vac.StockLote s ON s.IdStock = a.IdStock JOIN vac.LoteVacuna l ON l.IdLote = s.IdLote
+                                WHERE l.NumeroLote = @LoteSPR AND s.IdEstablecimiento = @Est AND a.Estado = 'PENDIENTE' AND a.TipoAlerta = 'STOCK_BAJO'));
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('trg_StockLote_Alerta', 'RN-12: una alerta al llegar al umbral, sin duplicados', '0/1', @Err);
+
+/* D5. La reposición por encima del umbral cierra la alerta de stock bajo */
+BEGIN TRANSACTION;
+BEGIN TRY
+    UPDATE s SET Cantidad = 5, UmbralMinimo = 10 FROM vac.StockLote s JOIN vac.LoteVacuna l ON l.IdLote = s.IdLote
+    WHERE l.NumeroLote = @LoteSPR AND s.IdEstablecimiento = @Est;
+    UPDATE s SET Cantidad = 500 FROM vac.StockLote s JOIN vac.LoteVacuna l ON l.IdLote = s.IdLote
+    WHERE l.NumeroLote = @LoteSPR AND s.IdEstablecimiento = @Est;
+    SET @Err = CONCAT(
+        (SELECT COUNT(*) FROM vac.Alerta a JOIN vac.StockLote s ON s.IdStock = a.IdStock JOIN vac.LoteVacuna l ON l.IdLote = s.IdLote
+         WHERE l.NumeroLote = @LoteSPR AND s.IdEstablecimiento = @Est AND a.Estado = 'PENDIENTE'), '/',
+        (SELECT COUNT(*) FROM vac.Alerta a JOIN vac.StockLote s ON s.IdStock = a.IdStock JOIN vac.LoteVacuna l ON l.IdLote = s.IdLote
+         WHERE l.NumeroLote = @LoteSPR AND s.IdEstablecimiento = @Est AND a.Estado = 'ATENDIDA'));
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('trg_StockLote_Alerta', 'Reponer sobre el umbral cierra la alerta', '0/1', @Err);
+
+/* D6. RN-13: un lote que vence en <= 30 días con existencias genera una alerta, una sola vez */
+BEGIN TRANSACTION;
+BEGIN TRY
+    DECLARE @IdLoteVenc INT, @Cre INT;
+    INSERT vac.LoteVacuna (IdVacuna, NumeroLote, Laboratorio, FechaVencimiento)
+    SELECT IdVacuna, 'PRB-VENCE-10', 'Prueba', DATEADD(DAY, 10, @Hoy) FROM vac.Vacuna WHERE Codigo = 'SPR';
+    SET @IdLoteVenc = SCOPE_IDENTITY();
+    INSERT vac.StockLote (IdLote, IdEstablecimiento, Cantidad, UmbralMinimo) VALUES (@IdLoteVenc, @Est, 40, 5);
+    EXEC vac.usp_GenerarAlertasStock @AlertasCreadas = @Cre OUTPUT;
+    EXEC vac.usp_GenerarAlertasStock @AlertasCreadas = @Cre OUTPUT;
+    SET @Err = CONCAT((SELECT COUNT(*) FROM vac.Alerta a JOIN vac.StockLote s ON s.IdStock = a.IdStock
+                       WHERE s.IdLote = @IdLoteVenc AND a.Estado = 'PENDIENTE' AND a.TipoAlerta = 'LOTE_POR_VENCER'), '/', @Cre);
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_GenerarAlertasStock', 'RN-13: alerta de lote por vencer, sin duplicar', '1/0', @Err);
+
+/* D7. RN-13: un lote que vence en más de 30 días no genera alerta; uno sin existencias tampoco */
+BEGIN TRANSACTION;
+BEGIN TRY
+    DECLARE @IdLoteLejos INT, @IdLoteVacio INT;
+    INSERT vac.LoteVacuna (IdVacuna, NumeroLote, Laboratorio, FechaVencimiento)
+    SELECT IdVacuna, 'PRB-VENCE-60', 'Prueba', DATEADD(DAY, 60, @Hoy) FROM vac.Vacuna WHERE Codigo = 'SPR';
+    SET @IdLoteLejos = SCOPE_IDENTITY();
+    INSERT vac.LoteVacuna (IdVacuna, NumeroLote, Laboratorio, FechaVencimiento)
+    SELECT IdVacuna, 'PRB-VACIO-10', 'Prueba', DATEADD(DAY, 10, @Hoy) FROM vac.Vacuna WHERE Codigo = 'SPR';
+    SET @IdLoteVacio = SCOPE_IDENTITY();
+    INSERT vac.StockLote (IdLote, IdEstablecimiento, Cantidad, UmbralMinimo) VALUES (@IdLoteLejos, @Est, 40, 5), (@IdLoteVacio, @Est, 0, 0);
+    EXEC vac.usp_GenerarAlertasStock @AlertasCreadas = @Cre OUTPUT;
+    SET @Err = CAST((SELECT COUNT(*) FROM vac.Alerta a JOIN vac.StockLote s ON s.IdStock = a.IdStock
+                     WHERE s.IdLote IN (@IdLoteLejos, @IdLoteVacio) AND a.TipoAlerta = 'LOTE_POR_VENCER') AS VARCHAR);
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_GenerarAlertasStock', 'RN-13: no alerta lotes lejanos ni sin existencias', '0', @Err);
+
+/* D8. Las alertas de stock no se mezclan con las de pacientes en el resumen general */
+BEGIN TRANSACTION;
+BEGIN TRY
+    SET @n = (SELECT AlertasPendientes FROM vac.vw_ResumenGeneral);
+    UPDATE s SET Cantidad = 1, UmbralMinimo = 10 FROM vac.StockLote s JOIN vac.LoteVacuna l ON l.IdLote = s.IdLote
+    WHERE l.NumeroLote = @LoteSPR AND s.IdEstablecimiento = @Est;
+    SET @Err = IIF((SELECT AlertasPendientes FROM vac.vw_ResumenGeneral) = @n, 'OK', 'cambió');
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('vw_ResumenGeneral', 'Las alertas de stock no cuentan como alertas de pacientes', 'OK', @Err);
+
 SELECT Caso, IIF(Esperado = Obtenido, 'OK', 'FALLA') AS Resultado, Objeto, Prueba, Esperado, Obtenido
 FROM @R ORDER BY Caso;
 SELECT SUM(IIF(Esperado = Obtenido, 1, 0)) AS Correctas, COUNT(*) AS Total FROM @R;

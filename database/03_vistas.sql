@@ -238,7 +238,7 @@ CREATE OR ALTER VIEW vac.vw_ResumenGeneral
 AS
     SELECT (SELECT COUNT(*) FROM vac.Paciente)                               AS TotalPacientes,
            (SELECT COUNT(*) FROM vac.DosisAplicada)                          AS TotalDosis,
-           (SELECT COUNT(*) FROM vac.Alerta WHERE Estado = 'PENDIENTE')      AS AlertasPendientes,
+           (SELECT COUNT(*) FROM vac.Alerta WHERE Estado = 'PENDIENTE' AND IdPaciente IS NOT NULL) AS AlertasPendientes,
            (SELECT COUNT(*) FROM vac.Brote WHERE FechaFin IS NULL)           AS BrotesActivos,
            (SELECT ISNULL(SUM(CasosConfirmados), 0) FROM vac.Brote WHERE FechaFin IS NULL) AS CasosActivos,
            (SELECT CAST(100.0 * SUM(ConSPR1) / NULLIF(SUM(ElegiblesSPR1), 0) AS DECIMAL(5,2)) FROM vac.vw_CoberturaSarampion) AS CoberturaRegionalSPR1,

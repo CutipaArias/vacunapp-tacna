@@ -102,16 +102,16 @@ Plan: [plan.md](plan.md) · Spec: [../SPEC.md](../SPEC.md)
 ---
 ## Fase 3 – `stock`
 
-- [ ] **T3.1 Tablas `StockLote` y `MovimientoStock`** (M)
+- [x] **T3.1 Tablas `StockLote` y `MovimientoStock`** (M)
   - Acceptance: stock por lote y establecimiento con umbral mínimo; movimientos de entrada/salida; sembrado de stock para los establecimientos de prueba; sin cantidades negativas (CHECK).
   - Verify: `./desplegar.ps1 -Pruebas` (2 corridas); casos de CHECK
   - Files: `database/09_stock.sql`, `database/07_pruebas.sql`, `desplegar.ps1`
   - Deps: Checkpoint B
 
-- [ ] **T3.2 Descuento de stock por dosis y alertas (RN-10…RN-13)** (M)
+- [x] **T3.2 Descuento de stock por dosis y alertas (RN-10…RN-13)** (M)
   - Acceptance: `trg_DosisAplicada_DescontarStock` descuenta 1; stock 0 rechaza (RN-11); `trg_StockLote_Alerta` crea alerta al llegar al umbral; `usp_GenerarAlertasStock` alerta lotes que vencen en ≤ 30 días; sin alertas duplicadas.
   - Verify: pruebas BD RN-10…RN-13; carrera: dos dosis simultáneas con stock 1 → solo una
-  - Files: `database/09_stock.sql`, `database/05_triggers.sql`, `database/04_procedimientos.sql`, `database/07_pruebas.sql`
+  - Files: `database/09_stock.sql` (triggers y SP van aquí: 09 corre después de 06 para no descontar stock de la carga histórica), `database/07_pruebas.sql`, `tests/VacunApp.Tests/StockTests.cs`
   - Deps: T3.1
 
 - [ ] **T3.3 Gestión de stock por el jefe (RF-09, CU09)** (M)
