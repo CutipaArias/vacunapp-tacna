@@ -166,6 +166,21 @@ global (se ajusta con `RateLimit__LoginPerMinute`; sin reenvío de la IP real no
   WHERE u.NombreUsuario = '<usuario>' AND p.NumeroDocumento = '<DNI del niño>';
   ```
 
+- **No hay alta de vacunadores ni de establecimientos en la aplicación.** Los 34 establecimientos y los 68 vacunadores del catálogo son
+  simulados (nombres y DNI ficticios) y se cargan también en la base de producción. Un usuario con rol vacunador o jefe se asocia a un
+  establecimiento (y el vacunador, a un registro de `vac.Vacunador` de ese mismo establecimiento). Para personal o centros reales, desde un
+  cliente SQL (probado en una transacción que se revirtió):
+
+  ```sql
+  INSERT vac.EstablecimientoSalud (CodigoRenipress, Nombre, Categoria, IdDistrito)   -- Categoria: I-1 … III-1
+  SELECT '<8 caracteres>', '<nombre>', 'I-2', d.IdDistrito FROM vac.Distrito d WHERE d.Ubigeo = '<ubigeo>';
+
+  INSERT vac.Vacunador (Dni, Nombres, Apellidos, Cargo, IdEstablecimiento)
+  VALUES ('<DNI de 8 dígitos>', '<nombres>', '<apellidos>', 'Enfermera(o)', <IdEstablecimiento>);
+  -- Cargo: Enfermera(o), Técnico(a) en enfermería, Médico(a) u Obstetra
+  ```
+
+  Después se crea la cuenta desde la pestaña Usuarios.
 - Un distrito sin pacientes registrados no aparece en el Tablero ni en la cobertura: sin elegibles no hay denominador.
 
 ## Fuentes

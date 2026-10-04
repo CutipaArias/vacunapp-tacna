@@ -216,10 +216,11 @@ Plan: [plan.md](plan.md) · Spec: [../SPEC.md](../SPEC.md)
   - Files: `tests/carga.ps1`, `docs/resultados-pruebas.md`
   - Deps: T6.2
 
-- [ ] **T6.4 Manuales y cierre** (S)
+- [~] **T6.4 Manuales y cierre** (S) — HECHO EN LOCAL; falta lo que depende de publicar (T6.2 remoto y T6.3)
   - Acceptance: README actualizado a v2.0 (23 tablas, roles, cómo correr/desplegar); manual de usuario por rol y manual de recuperación (RNF-08); SPEC.md actualizado con las decisiones finales.
   - Verify: otra persona sigue el README y levanta todo en limpio
   - Files: `README.md`, `docs/manual-usuario.md`, `docs/recuperacion.md`, `SPEC.md`
+  - Resultado (03/10/2026): `README.md` a v2.0 (23 tablas, 24 procedimientos, 9 triggers, 8 vistas, 4 funciones, roles, cómo ejecutar, probar y desplegar); `docs/manual-usuario.md` por rol; `docs/manual-pruebas.md` con las cinco funciones clave (pasos, resultado esperado, prueba automática que las cubre); `docs/cierre-tecnico.md` (alcance, matriz RF→prueba, RNF con cifras medidas, criterios de éxito, decisiones, límites y recuperación RNF-08, que queda en su sección 8 y no en un `docs/recuperacion.md` aparte); `docs/seguridad.md` y `SPEC.md` actualizados. Ningún documento escribe contraseñas. **No cumplido todavía:** «otra persona sigue el README y levanta todo en limpio» (lo hice yo: dos despliegues limpios seguidos sin errores, pero no hay una segunda persona); el manual de pruebas no se recorrió con sesión real en el navegador; los números RF/RNF de FD03 y FD04 (v1) no coinciden con los de este plan y hay que alinearlos al actualizar los .docx.
   - Deps: T6.3
 
 ### Checkpoint final

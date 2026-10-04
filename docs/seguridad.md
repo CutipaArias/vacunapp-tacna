@@ -1,7 +1,7 @@
-# Seguridad del módulo identidad (T1.6)
+# Seguridad de VacunApp Tacna v2.0
 
-Revisión hecha el 03/10/2026 con la lista de /security-and-hardening. Cada control tiene una prueba automática
-(`tests/VacunApp.Tests`) o una verificación indicada.
+Revisión inicial del módulo identidad (T1.6, 03/10/2026) con la lista de /security-and-hardening, ampliada en las fases de producción (T6.1 y T6.2).
+Cada control tiene una prueba automática (`tests/VacunApp.Tests`) o una verificación indicada.
 
 ## Modelo de amenazas (resumen)
 
@@ -12,7 +12,7 @@ Revisión hecha el 03/10/2026 con la lista de /security-and-hardening. Cada cont
 | Cookie de sesión | Sesión | Robo por XSS o CSRF | `HttpOnly`, `SameSite=Strict`, `Secure` fuera de Development, vigencia de 8 h sin renovación |
 | API → SQL Server | Base de datos | Inyección SQL | Solo `SqlParameter` tipados y procedimientos almacenados; ninguna consulta se arma concatenando entrada |
 | Base de datos | Contraseñas | Filtración de la tabla | Solo hash PBKDF2 de `PasswordHasher`; `CHECK` impide guardar texto corto como si fuera hash |
-| Repositorio | Secretos | Credenciales publicadas | Sin contraseñas en código ni en el repo (`.env`, `appsettings.Development.json` y claves semilla están en `.gitignore`) |
+| Repositorio | Secretos | Credenciales publicadas | Sin contraseñas en código ni en el repo (`.env`, `appsettings.Development.json`, `*.pfx` y el paquete `publicar/` están en `.gitignore`) |
 
 ## Controles implementados
 
@@ -29,18 +29,29 @@ Revisión hecha el 03/10/2026 con la lista de /security-and-hardening. Cada cont
 - **Cabeceras:** `Content-Security-Policy` (`script-src 'self'`, sin `unsafe-inline` ni `unsafe-eval`; `unsafe-inline` solo en estilos
   por las barras de cobertura), `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`,
   `Permissions-Policy`, `Cache-Control: no-store` en `/api/*` y HSTS fuera de Development.
-- **Front-end:** ningún `<script>` ni manejador `on…=` en línea; todo texto de la base pasa por `esc()` antes de entrar en `innerHTML`
-  (revisión manual de las 22 asignaciones) o se escribe con `textContent`.
+- **Front-end:** ningún `<script>` ni manejador `on…=` en línea; todo texto de la base o escrito por un usuario (número de lote, nombre de campaña,
+  nombres) pasa por `esc()` antes de entrar en `innerHTML` o se escribe con `textContent`. Revisión manual del 03/10/2026 de las 73 líneas con
+  `innerHTML` de `panel.js` y `dashboard.js`: toda interpolación sin `esc()` es un número, una constante, un destino de `textContent` o un
+  `confirm()`. Es una revisión a ojo, no una prueba automática; las gráficas se dibujan en un `canvas`, sin HTML.
 - **Errores:** fuera de Development un error inesperado devuelve un mensaje genérico, sin traza; los errores de negocio
   (`THROW 50000+`) sí muestran su mensaje en español.
 - **Auditoría de dependencias:** `dotnet list package --vulnerable --include-transitive` sin hallazgos (panel y pruebas).
 - **Último administrador:** `usp_ActualizarUsuario` impide desactivar o degradar al único administrador activo.
+- **Producción (T6.1 y T6.2):** `scripts/publicar.ps1` arma un paquete sin `appsettings.Development*.json`, `appsettings.Production*.json`,
+  plantillas `*.example.json`, `.env`, `.pfx` ni símbolos `.pdb`, y se detiene si encuentra contraseñas en los `.json` o `.config`;
+  `tests/publicacion.ps1` repite esa comprobación y busca los valores reales de las claves locales dentro del paquete. La base de producción
+  (`-Produccion`) no lleva cuentas de demostración: solo `admin`, sin clave, que la aplicación asigna al arrancar desde `Seed:AdminPassword`
+  (variable de entorno del hosting). La cookie sale `Secure` y se verificó con HTTPS local en modo `Production`.
+- **Revisión de secretos antes de cada commit:** búsqueda de los valores reales de las claves locales en el diff y en el historial del repositorio
+  (`git log -S`); sin hallazgos.
 
 ## Cómo se verifica
 
 ```powershell
-./desplegar.ps1 -Pruebas            # 41 casos SQL
-dotnet test tests/VacunApp.Tests    # 73 pruebas (login, autorización, usuarios, seguridad)
+./desplegar.ps1 -Pruebas            # 144 casos SQL
+dotnet test tests/VacunApp.Tests    # 337 pruebas de la API (login, autorización, usuarios, seguridad y los demás módulos)
+./tests/produccion.ps1              # base de producción: sin datos de prueba y solo el administrador
+./tests/publicacion.ps1             # paquete sin secretos y arranque en modo Production con HTTPS
 dotnet list panel package --vulnerable --include-transitive
 ```
 
@@ -48,9 +59,12 @@ dotnet list panel package --vulnerable --include-transitive
 
 | Tema | Estado |
 |---|---|
-| Contraseña de desarrollo de SQL Server (`sa`) | Ya no está en el código; el README publicado en `main` la sigue mostrando (decisión del equipo) |
-| Límite por IP con varias instancias o proxy | Documentado arriba; revisar al desplegar (T6.2) |
+| Contraseña de desarrollo de SQL Server (`sa`) | No está en el código ni en el historial de este repositorio; vive en `.env`, que no se versiona |
+| Límite por IP con varias instancias o proxy | Contador en memoria: válido para una instancia. Detrás de un proxy sin reenvío de la IP real se cuenta por la IP del proxy; revisar si el hosting usa uno |
 | CSRF | Mitigado con `SameSite=Strict` y API solo JSON; se añadiría token antifalsificación si se sirviera la API a otros orígenes |
-| Autoservicio de cambio de contraseña / recuperación | Fuera del alcance de v2.0 (el administrador crea las cuentas) |
-| `usp_ListarPendientes` tarda 15–40 s | Es un tema de rendimiento (RNF-01), no de seguridad; tarea aparte creada |
-| Chart.js por CDN (T5.3) | Cuando se añada habrá que permitir su origen en `script-src` y fijar SRI |
+| Autoservicio de cambio de contraseña / recuperación | Fuera del alcance de v2.0: el administrador crea las cuentas y no hay forma de cambiarlas desde la aplicación. Procedimiento manual en `docs/despliegue-monsterasp.md` §11 |
+| Cadena de conexión con `TrustServerCertificate=True` | Cifra el canal, pero no valida la identidad del servidor. Aceptado para el hosting compartido; validar si el hosting ofrece un certificado verificable |
+| `Seed__AdminPassword` en el hosting | Solo se usa mientras `admin` no tiene clave; tras el primer ingreso conviene quitarla de las variables de entorno |
+| HTTPS en el hosting | Sin comprobar en el hosting real: la ayuda de MonsterASP.NET indica que no viene activo. Sin HTTPS la cookie `Secure` no se envía y no se puede iniciar sesión |
+| Rendimiento de `usp_ListarPendientes` | Resuelto (tabla temporal y `11_estadisticas.sql`); ver `docs/capacidad.md` |
+| Chart.js | Se sirve desde `panel/wwwroot/vendor/` (versión 4.5.1, MIT, integridad verificada contra npm); la política CSP se mantiene en `script-src 'self'` |
