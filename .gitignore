@@ -10,3 +10,6 @@ panel/appsettings.Production.json
 *.env
 *.pfx
 *.publishsettings
+
+# Paquete generado por scripts/publicar.ps1
+publicar/

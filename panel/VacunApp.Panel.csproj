@@ -6,6 +6,18 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <!-- Paquete publicado (dotnet publish / scripts/publicar.ps1): sin símbolos de depuración. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DebugType>none</DebugType>
+  </PropertyGroup>
+
+  <!-- La configuración local (con la clave de sa y las claves semilla) y sus plantillas nunca viajan en el paquete:
+       en el hosting la configuración llega por variables de entorno o por un appsettings.Production.json creado allí. -->
+  <ItemGroup>
+    <Content Update="appsettings.Development*.json" CopyToPublishDirectory="Never" />
+    <Content Update="appsettings.Production*.json" CopyToPublishDirectory="Never" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.SqlClient" Version="7.1.0" />
   </ItemGroup>

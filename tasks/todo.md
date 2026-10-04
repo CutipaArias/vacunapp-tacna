@@ -203,10 +203,11 @@ Plan: [plan.md](plan.md) · Spec: [../SPEC.md](../SPEC.md)
   - Deps: Checkpoint F · **Requiere que tú proporciones credenciales; yo no las introduzco en formularios ni las guardo en el repo**
   - Resultado (03/10/2026): `database/12_produccion.sql` y modo `-Produccion` en `scripts/desplegar-remoto.ps1` (sin datos de prueba, solo `admin` sin clave, se detiene si ya existe `[vac]`, no se combina con `-Pruebas`). `tests/produccion.ps1` contra una base local vacía: 32/32 (rojo antes del cambio: el parámetro se ignoraba y se cargaban los datos de prueba). Pendiente de ti: ejecutarlo contra la base de MonsterASP.NET y confirmar runtime, límites y tamaño final allí.
 
-- [ ] **T6.2 Publicar la aplicación** (M)
+- [~] **T6.2 Publicar la aplicación** (M) — PREPARADA EN LOCAL; falta subirla al hosting con tus credenciales
   - Acceptance: `dotnet publish` generado; cadena de conexión y secretos fuera del repo (variables de entorno / `appsettings.Production.json` ignorado por git); app accesible por HTTPS; login funciona.
   - Verify: `read_network_requests` / navegador contra la URL pública
-  - Files: `panel/appsettings.Production.example.json`, `.gitignore`, `docs/despliegue.md`
+  - Files: `panel/appsettings.Production.example.json`, `.gitignore`, `docs/despliegue-monsterasp.md`, `scripts/publicar.ps1`, `panel/VacunApp.Panel.csproj`, `tests/publicacion.ps1`
+  - Resultado (03/10/2026): `scripts/publicar.ps1 [-Zip]` y guía `docs/despliegue-monsterasp.md`. Rojo antes del cambio: el paquete llevaba `appsettings.Development.json` con la clave de `sa` y las claves semilla; corregido en el `.csproj`. `tests/publicacion.ps1`: 51/51 (paquete sin secretos, arranque en `Production` con HTTPS temporal sobre una base `-Produccion`, login de `admin`, GET sin 5xx, 91,5 MB de memoria). Suite xUnit 337/337. Pendiente de ti: crear el sitio y la base en MonsterASP.NET, cargar la base, definir variables, subir el ZIP, activar HTTPS y repetir las comprobaciones sobre la URL pública (no verificado contra el hosting real).
   - Deps: T6.1
 
 - [ ] **T6.3 Prueba de carga y concurrencia en producción** (S)
