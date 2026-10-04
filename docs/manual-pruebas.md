@@ -37,7 +37,7 @@ pruebas manuales antes de la suite automática.
 
 | Qué | Comando | Resultado esperado (03/10/2026) |
 |---|---|---|
-| Base: reglas, triggers y procedimientos | `./desplegar.ps1 -Pruebas` | 144 de 144 casos, dos despliegues seguidos (33 y 38 s) |
+| Base: reglas, triggers y procedimientos | `./desplegar.ps1 -Pruebas` | 144 de 144 casos en tres despliegues limpios (33, 38 y 35 s) |
 | API: autorización, reglas, mensajes | `dotnet test tests/VacunApp.Tests` | 337 de 337, unos 50 s |
 | Concurrencia de reservas | `./tests/concurrencia.ps1` | 22 escenarios correctos (227 s) |
 | Carga de producción | `./tests/produccion.ps1` | 32 de 32 |
@@ -172,16 +172,16 @@ movimiento, RN-11 stock cero, RN-12 alerta única al llegar al umbral, reposici�
 **Automático:** `DashboardTests` (18), `BrotesTests` (15), `BrotesCierreTacnaTests` (2), `AlertasTests` (21), `CampanasTests` (31); `07_pruebas.sql`: P1…P8 (alertas por
 zona de brote, cierre y descarte, generación por lotes idempotente) y H57…H68 (campañas).
 
-**Rendimiento (RNF-01).** Salida de `./desplegar.ps1 -Pruebas` del 03/10/2026, 20 000 pacientes y unas 308 000 dosis, dos despliegues seguidos
+**Rendimiento (RNF-01).** Salida de `./desplegar.ps1 -Pruebas` del 03/10/2026, 20 000 pacientes y unas 308 000 dosis, tres despliegues (los dos primeros seguidos)
 (límite 2 s):
 
-| Reporte | Primera corrida | Segunda corrida |
-|---|---|---|
-| `vw_CoberturaDistrito` (todas las dosis, 532 filas) | 414 ms | 398 ms |
-| `vw_CoberturaSarampion` (28 distritos) | 169 ms | 181 ms |
-| `vw_DosisPendientes` (unas 36 300 filas) | 203 ms | 193 ms |
-| `vw_AlertasPendientes` (unas 33 000 filas) | 478 ms | 466 ms |
-| `vw_ResumenGeneral` | 176 ms | 176 ms |
+| Reporte | Primera corrida | Segunda corrida | Tercera corrida |
+|---|---|---|---|
+| `vw_CoberturaDistrito` (todas las dosis, 532 filas) | 414 ms | 398 ms | 406 ms |
+| `vw_CoberturaSarampion` (28 distritos) | 169 ms | 181 ms | 168 ms |
+| `vw_DosisPendientes` (unas 36 300 filas) | 203 ms | 193 ms | 191 ms |
+| `vw_AlertasPendientes` (unas 33 000 filas) | 478 ms | 466 ms | 441 ms |
+| `vw_ResumenGeneral` | 176 ms | 176 ms | 176 ms |
 
 ## 6. Despliegue y producción
 

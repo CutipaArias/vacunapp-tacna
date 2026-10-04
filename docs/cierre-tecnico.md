@@ -61,13 +61,13 @@ Entorno: SQL Server 2022 en Docker, 20 000 pacientes y unas 308 000 dosis simula
 
 | RNF | Meta | Resultado | Evidencia |
 |---|---|---|---|
-| RNF-01 Rendimiento | < 2 s con 5 000+ registros; local < 0,5 s con más de 300 000 dosis | Cobertura por distrito (todas las dosis, 532 filas) 398–414 ms; sarampión 169–181 ms; pendientes 193–203 ms; alertas 466–478 ms; resumen 176 ms. API del tablero: 62 ms el reporte y 168 ms la vista de sarampión. Con 10 usuarios simultáneos, la consulta más lenta (cobertura) llegó a 1,48 s | `desplegar.ps1 -Pruebas` (dos corridas), `docs/capacidad.md`, DashboardTests |
+| RNF-01 Rendimiento | < 2 s con 5 000+ registros; local < 0,5 s con más de 300 000 dosis | Cobertura por distrito (todas las dosis, 532 filas) 398–414 ms; sarampión 168–181 ms; pendientes 191–203 ms; alertas 441–478 ms; resumen 176 ms (tres despliegues). API del tablero: 62 ms el reporte y 168 ms la vista de sarampión. Con 10 usuarios simultáneos, la consulta más lenta (cobertura) llegó a 1,48 s | `desplegar.ps1 -Pruebas` (dos corridas), `docs/capacidad.md`, DashboardTests |
 | RNF-02 Seguridad | Acceso autenticado por rol y establecimiento; solo hash; parámetros tipados; conexión cifrada | PBKDF2 (`PasswordHasher`); cookie `HttpOnly`, `SameSite=Strict` y `Secure` fuera de desarrollo; CSP sin scripts de terceros; bloqueo a los 5 intentos y límite por IP; 403 uniforme; conexión con `Encrypt=True`. Revisión de secretos y de paquetes vulnerables sin hallazgos | AutorizacionTests (24), SeguridadTests (13), `docs/seguridad.md` |
 | RNF-03 Concurrencia | Con dos reservas del último cupo, una sola se acepta; 20 usuarios en la demostración | 22 escenarios con 2, 10 y 20 sesiones: siempre exactamente las reservas que caben, nunca sobrecupo ni interbloqueos. **Pendiente:** 20 usuarios simultáneos por HTTP contra el hosting (T6.3) | `tests/concurrencia.ps1` (227 s) |
 | RNF-04 Integridad | 0 dosis que incumplan el esquema | 36 claves foráneas, 31 CHECK, 14 únicas y triggers; casos N1–N11 rechazan la dosis inválida por el procedimiento y por `INSERT` directo | 144/144 casos SQL |
 | RNF-05 Confiabilidad | Transaccional (ACID) | `SET XACT_ABORT ON` y transacciones en cada procedimiento; una falla revierte toda la operación (p. ej. atender sin stock deja la cita sin cambios) | AtencionTests, casos D y H |
 | RNF-06 Usabilidad | Mensajes en español; pantallas adaptables | Mensajes de negocio y de validación en español, sin nombres internos; hojas de estilo con ajustes para pantallas pequeñas. **No verificado con sesión real en un celular** | ArchivosEstaticosTests y revisión con respuestas simuladas |
-| RNF-07 Mantenibilidad | Scripts numerados e idempotentes; pruebas automatizadas | Dos despliegues limpios seguidos sin errores (33 y 38 s, 144/144 las dos veces); carga de producción en 2 s | `desplegar.ps1`, `tests/produccion.ps1` |
+| RNF-07 Mantenibilidad | Scripts numerados e idempotentes; pruebas automatizadas | Tres despliegues limpios sin errores (33, 38 y 35 s, 144/144 las tres veces); carga de producción en 2 s | `desplegar.ps1`, `tests/produccion.ps1` |
 | RNF-08 Recuperación | Base recreable con los scripts; sin garantía del plan gratuito | Esquema, catálogos y administrador se recrean con `desplegar-remoto.ps1 -Produccion` (ver sección 8) | `tests/produccion.ps1` |
 
 Memoria de la aplicación: 91,5 MB de memoria de trabajo tras recorrer todos los GET con la base de producción vacía, y 145 MB de pico con
@@ -78,7 +78,7 @@ datos: 12 MB tras la carga de producción y 272 MB con los 20 000 pacientes, fre
 
 | # | Criterio | Estado |
 |---|---|---|
-| 1 | 23 tablas en 3FN; `desplegar.ps1` recrea todo sin errores dos veces seguidas | 23 tablas y dos despliegues limpios seguidos: cumplido. La 3FN es del diseño (FD04); no hay prueba automática |
+| 1 | 23 tablas en 3FN; `desplegar.ps1` recrea todo sin errores dos veces seguidas | 23 tablas y despliegues limpios repetidos sin errores: cumplido. La 3FN es del diseño (FD04); no hay prueba automática |
 | 2 | Login con 5 roles; cada rol ve solo su menú; vacunador y jefe limitados a su establecimiento (403) | Cumplido en API y pruebas (AutorizacionTests, 24); el menú por rol **no se vio con sesión real** |
 | 3 | 0 dosis inválidas insertables (RN-03…RN-11) por cualquier vía | Cumplido |
 | 4 | Dos reservas simultáneas del último cupo: exactamente una aceptada | Cumplido (22 escenarios) |
@@ -120,7 +120,7 @@ datos: 12 MB tras la carga de producción y 272 MB con los 20 000 pacientes, fre
 9. **Conexión con `TrustServerCertificate=True`:** cifra, pero no valida la identidad del servidor.
 10. **La tolerancia de 1 mes** de las alertas atrasadas está en dos sitios (el generador y el cierre de brote); si cambia, hay que cambiarla en ambos.
 11. **Consultas que usan `fn_DosisPendientes`:** `usp_ListarPendientes` se estabilizó; no se detectó el mismo problema en `vw_DosisPendientes`
-    (193–203 ms), pero comparten el patrón y conviene volver a medir tras cargas masivas.
+    (191–203 ms), pero comparten el patrón y conviene volver a medir tras cargas masivas.
 12. **Umbrales de negocio** (30 días, 24 horas, 95 % y 80 %) y lista de dosis: supuestos del equipo, por validar con la DIRESA.
 13. **Pruebas:** la interfaz se comprobó con respuestas simuladas, no con una sesión real de punta a punta. Durante el desarrollo se observó una falla
     aislada de la suite xUnit que no se pudo reproducir. La suite reasigna las claves de las cuentas semilla en la base de desarrollo
