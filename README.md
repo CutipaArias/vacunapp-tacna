@@ -151,4 +151,4 @@ FD01…FD06-*.docx          informes del proyecto (formato EPIS)
 | FD03 Especificación de Requerimientos | [docx](FD03-EPIS-Informe%20SRS-VacunApp_1.docx) |
 | FD04 Arquitectura de Software | [docx](FD04-EPIS-Informe%20SAD-VacunApp_1.docx) |
 | FD05 Informe Final | [docx](FD05-EPIS-Informe%20Final-VacunApp_1.docx) |
-| FD06 Propuesta del Proyecto | [docx](FD06-EPIS-PropuestaProyecto.docx) |
+| FD06 Propuesta del Proyecto | [docx](FD06-EPIS-Propuesta%20del%20Proyecto-VacunApp.docx) |
