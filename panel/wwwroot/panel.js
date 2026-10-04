@@ -4,6 +4,8 @@ const pct = n => n == null ? '—' : Number(n).toFixed(1) + ' %';
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fecha = s => s ? String(s).slice(0, 10) : '—';
 let cat, yo;
+// Parámetros de consulta sin los filtros en blanco: un parámetro vacío (dosis=) no significa nada para la API.
+const qs = o => new URLSearchParams(Object.entries(o).filter(([, v]) => v !== "" && v != null));
 
 async function api(url, opts) {
   const t0 = performance.now();
@@ -423,7 +425,7 @@ let horarios = [];
 const hoyISO = (dias = 0) => { const d = new Date(); d.setDate(d.getDate() + dias); return d.toLocaleDateString('sv-SE'); };
 
 async function cargarHorarios() {
-  const filas = await api('/api/horarios?' + new URLSearchParams({ desde: $('#h-desde').value, hasta: $('#h-hasta').value }));
+  const filas = await api('/api/horarios?' + qs({ desde: $('#h-desde').value, hasta: $('#h-hasta').value }));
   horarios = filas;
   $('#t-hor').textContent = `· ${filas.length} franjas · ${filas.__ms} ms`;
   table($('#hor-tbl'), [
@@ -474,7 +476,7 @@ function prepararHorarios() {
 
 // ---- Auditoría de dosis (solo ADMINISTRADOR) ----
 async function cargarAuditoria() {
-  const r = await api('/api/auditoria?' + new URLSearchParams({ documento: $('#au-doc').value.trim(), operacion: $('#au-op').value, top: 200 }));
+  const r = await api('/api/auditoria?' + qs({ documento: $('#au-doc').value.trim(), operacion: $('#au-op').value, top: 200 }));
   $('#t-aud').textContent = `· ${r.length} registros · ${r.__ms} ms`;
   table($('#aud'), [
     { h: 'Fecha', f: r => esc(String(r.fecha).replace('T', ' ').slice(0, 19)) },

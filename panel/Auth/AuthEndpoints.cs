@@ -91,7 +91,7 @@ static class AuthEndpoints
             // Cuenta bloqueada: se rechaza aunque la clave sea correcta, con el mismo mensaje de siempre.
             if (cuenta is { Bloqueada: true })
             {
-                log.LogWarning("Intento de acceso a la cuenta bloqueada {Usuario} desde {Ip}", usuario, ctx.Connection.RemoteIpAddress);
+                log.LogWarning("Intento de acceso a la cuenta bloqueada {Usuario} desde {Ip}", cuenta.NombreUsuario, ctx.Connection.RemoteIpAddress);
                 return Results.Json(new { error = MensajeCredenciales }, statusCode: StatusCodes.Status401Unauthorized);
             }
 
@@ -100,7 +100,12 @@ static class AuthEndpoints
                 // Solo las cuentas existentes y activas acumulan fallos; un usuario inexistente no deja rastro.
                 if (cuenta is { Activo: true, ClaveHash: not null })
                     await repo.RegistrarFalloAsync(cuenta.IdUsuario, MaxIntentos, MinutosBloqueo);
-                log.LogWarning("Acceso fallido para {Usuario} desde {Ip}", usuario, ctx.Connection.RemoteIpAddress);
+                // Solo se registra el nombre de una cuenta que existe: lo escrito en un usuario inexistente podría ser
+                // una contraseña pegada por error y no debe quedar en los registros.
+                if (cuenta is null)
+                    log.LogWarning("Acceso fallido para un usuario inexistente desde {Ip}", ctx.Connection.RemoteIpAddress);
+                else
+                    log.LogWarning("Acceso fallido para {Usuario} desde {Ip}", cuenta.NombreUsuario, ctx.Connection.RemoteIpAddress);
                 return Results.Json(new { error = MensajeCredenciales }, statusCode: StatusCodes.Status401Unauthorized);
             }
 

@@ -69,6 +69,19 @@ app.Use(async (ctx, next) =>
     }
 });
 
+// Un filtro en blanco del formulario llega como parámetro vacío (dosis=): significa "sin filtro". Se quita antes del
+// enlace de parámetros, que de otro modo rechazaría "" como número o booleano.
+app.Use(async (ctx, next) =>
+{
+    if (ctx.Request.Path.StartsWithSegments("/api") && ctx.Request.Query.Any(q => q.Value.All(string.IsNullOrEmpty)))
+    {
+        var limpio = ctx.Request.Query.Where(q => !q.Value.All(string.IsNullOrEmpty))
+            .ToDictionary(q => q.Key, q => q.Value);
+        ctx.Request.QueryString = QueryString.Create(limpio);
+    }
+    await next();
+});
+
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseRateLimiter();
