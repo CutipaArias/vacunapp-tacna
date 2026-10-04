@@ -165,11 +165,19 @@ GO
 
 /* ---------------------------------------------------------------------
    4. usp_CerrarBrote
-   Da por controlado un brote y descarta sus alertas aún pendientes.
+   Da por controlado un brote y resuelve sus alertas pendientes (RN-20):
+   - si otro brote activo sigue cubriendo la dosis, la alerta pasa a ese brote;
+   - si la dosis tiene más atraso que la tolerancia de usp_GenerarAlertasAtrasadas (1 mes), la alerta
+     vuelve a DOSIS_ATRASADA: el brote la había escalado y el paciente sigue pendiente;
+   - el resto (alertas nacidas solo por la zona de brote) se descarta.
+   No exige marca de origen en el esquema: el atraso se recalcula con la misma regla del generador.
    --------------------------------------------------------------------- */
 CREATE OR ALTER PROCEDURE vac.usp_CerrarBrote
-    @IdBrote  INT,
-    @FechaFin DATE = NULL
+    @IdBrote            INT,
+    @FechaFin           DATE = NULL,
+    @AlertasRestauradas INT  = NULL OUTPUT,
+    @AlertasDescartadas INT  = NULL OUTPUT,
+    @AlertasReasignadas INT  = NULL OUTPUT
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -182,12 +190,39 @@ BEGIN
     IF @FechaFin < (SELECT FechaInicio FROM vac.Brote WHERE IdBrote = @IdBrote)
         THROW 50026, 'La fecha de cierre no puede ser anterior al inicio del brote.', 1;
 
+    DECLARE @Hoy DATE = CAST(GETDATE() AS DATE);
+
     BEGIN TRANSACTION;
         UPDATE vac.Brote SET FechaFin = @FechaFin WHERE IdBrote = @IdBrote;
+
+        -- Otro brote activo que cubra la misma dosis: la alerta se queda en zona de brote, ligada a ese.
+        UPDATE a
+        SET IdBrote = z.IdBrote
+        FROM vac.Alerta a
+        JOIN (SELECT IdPaciente, IdEsquema, MIN(IdBrote) AS IdBrote
+              FROM vac.fn_PendientesZonaBrote(@Hoy)
+              GROUP BY IdPaciente, IdEsquema) z
+          ON z.IdPaciente = a.IdPaciente AND z.IdEsquema = a.IdEsquema
+        WHERE a.IdBrote = @IdBrote AND a.Estado = 'PENDIENTE'
+        OPTION (LOOP JOIN, HASH JOIN);
+        SET @AlertasReasignadas = @@ROWCOUNT;
+
+        -- Dosis atrasada (misma regla que el generador): vuelve a DOSIS_ATRASADA.
+        UPDATE a
+        SET TipoAlerta = 'DOSIS_ATRASADA', IdBrote = NULL
+        FROM vac.Alerta a
+        JOIN (SELECT IdPaciente, IdEsquema
+              FROM vac.fn_DosisPendientes(@Hoy)
+              WHERE MesesAtraso > 1) dp
+          ON dp.IdPaciente = a.IdPaciente AND dp.IdEsquema = a.IdEsquema
+        WHERE a.IdBrote = @IdBrote AND a.Estado = 'PENDIENTE'
+        OPTION (LOOP JOIN, HASH JOIN);
+        SET @AlertasRestauradas = @@ROWCOUNT;
 
         UPDATE vac.Alerta
         SET Estado = 'DESCARTADA', FechaAtencion = SYSDATETIME()
         WHERE IdBrote = @IdBrote AND Estado = 'PENDIENTE';
+        SET @AlertasDescartadas = @@ROWCOUNT;
     COMMIT;
 END
 GO

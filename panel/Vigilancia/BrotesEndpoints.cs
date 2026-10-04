@@ -66,10 +66,20 @@ static class BrotesEndpoints
                 fin = f.ToDateTime(TimeOnly.MinValue);
             }
 
-            var descartadas = (int)(await db.QueryAsync(
-                "SELECT COUNT(*) AS N FROM vac.Alerta WHERE IdBrote = @Id AND Estado = 'PENDIENTE'", ("@Id", idBrote)))[0][0]["N"]!;
-            await db.ExecAsync("vac.usp_CerrarBrote", ("@IdBrote", idBrote), ("@FechaFin", fin));
-            return Results.Ok(new { idBrote, alertasDescartadas = descartadas });
+            // Las alertas escaladas vuelven a DOSIS_ATRASADA, las que otro brote activo cubre pasan a ese brote y el resto se descarta.
+            SqlParameter Salida(string nombre) => new(nombre, SqlDbType.Int) { Direction = ParameterDirection.Output };
+            var restauradas = Salida("@AlertasRestauradas");
+            var descartadas = Salida("@AlertasDescartadas");
+            var reasignadas = Salida("@AlertasReasignadas");
+            await db.ExecAsync("vac.usp_CerrarBrote", ("@IdBrote", idBrote), ("@FechaFin", fin),
+                ("@AlertasRestauradas", restauradas), ("@AlertasDescartadas", descartadas), ("@AlertasReasignadas", reasignadas));
+            return Results.Ok(new
+            {
+                idBrote,
+                alertasRestauradas = (int)restauradas.Value,
+                alertasDescartadas = (int)descartadas.Value,
+                alertasReasignadas = (int)reasignadas.Value,
+            });
         });
     }
 

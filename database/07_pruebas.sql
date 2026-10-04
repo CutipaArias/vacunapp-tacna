@@ -181,6 +181,27 @@ EXEC vac.usp_CerrarBrote @IdBrote;
 SELECT @n = COUNT(*) FROM vac.Alerta WHERE IdBrote = @IdBrote AND Estado = 'PENDIENTE';
 INSERT @R VALUES ('usp_CerrarBrote', 'No quedan alertas pendientes del brote', '0', CAST(@n AS VARCHAR));
 
+/* P6b. Cerrar el brote devuelve a DOSIS_ATRASADA las alertas que el brote escaló (en vez de descartarlas); las demás se descartan.
+   Los pacientes con atraso mayor que la tolerancia (1 mes, la de usp_GenerarAlertasAtrasadas) vuelven a la lista de atrasadas. */
+DECLARE @BrA INT, @KZona INT, @KAtraso INT, @KRest INT, @KDesc INT;
+DECLARE @AlBrA TABLE (IdAlerta BIGINT PRIMARY KEY, Atrasada BIT);
+EXEC vac.usp_DeclararBrote '230401', 'Rubéola', @Hoy, 1, @BrA OUTPUT, @n OUTPUT;
+INSERT @AlBrA
+SELECT a.IdAlerta, IIF(EXISTS (SELECT 1 FROM vac.fn_DosisPendientes(CAST(GETDATE() AS DATE)) dp
+                               WHERE dp.IdPaciente = a.IdPaciente AND dp.IdEsquema = a.IdEsquema AND dp.MesesAtraso > 1), 1, 0)
+FROM vac.Alerta a WHERE a.IdBrote = @BrA AND a.Estado = 'PENDIENTE' AND a.TipoAlerta = 'ZONA_BROTE';
+SET @KZona   = (SELECT COUNT(*) FROM @AlBrA);
+SET @KAtraso = (SELECT COUNT(*) FROM @AlBrA WHERE Atrasada = 1);
+EXEC vac.usp_CerrarBrote @BrA, NULL, @KRest OUTPUT, @KDesc OUTPUT;
+SET @n = (SELECT COUNT(*) FROM vac.Alerta a JOIN @AlBrA x ON x.IdAlerta = a.IdAlerta
+          WHERE a.Estado = 'PENDIENTE' AND a.TipoAlerta = 'DOSIS_ATRASADA' AND a.IdBrote IS NULL AND x.Atrasada = 1);
+INSERT @R VALUES ('usp_CerrarBrote', 'Las alertas escaladas con atraso vuelven a DOSIS_ATRASADA pendiente', CAST(@KAtraso AS VARCHAR), CAST(@n AS VARCHAR));
+SET @n = (SELECT COUNT(*) FROM vac.Alerta a JOIN @AlBrA x ON x.IdAlerta = a.IdAlerta WHERE a.Estado = 'DESCARTADA' AND x.Atrasada = 0);
+INSERT @R VALUES ('usp_CerrarBrote', 'Las alertas sin atraso se descartan', CAST(@KZona - @KAtraso AS VARCHAR), CAST(@n AS VARCHAR));
+SET @n = (SELECT COUNT(*) FROM vac.Alerta WHERE IdBrote = @BrA AND Estado = 'PENDIENTE');
+INSERT @R VALUES ('usp_CerrarBrote', 'No queda ninguna alerta pendiente ligada al brote cerrado', '0', CAST(@n AS VARCHAR));
+INSERT @R VALUES ('usp_CerrarBrote', 'Informa cuántas restauró y cuántas descartó', CONCAT(@KAtraso, '/', @KZona - @KAtraso), CONCAT(@KRest, '/', @KDesc));
+
 /* P7. Atender una alerta manualmente */
 DECLARE @IdAlerta BIGINT = (SELECT TOP (1) IdAlerta FROM vac.Alerta WHERE Estado = 'PENDIENTE');
 EXEC vac.usp_AtenderAlerta @IdAlerta, 'DESCARTADA';

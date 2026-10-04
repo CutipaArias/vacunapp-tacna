@@ -8,7 +8,7 @@ namespace VacunApp.Tests;
 /// <summary>
 /// RF-10 / CU10: declarar y cerrar brotes es exclusivo del epidemiólogo y el administrador (RN-22).
 /// RN-19: un solo brote activo por enfermedad y distrito. Al declarar se generan alertas de las dosis pendientes
-/// de la zona y se informa cuántas; al cerrar se descartan las que sigan pendientes (RN-20).
+/// de la zona y se informa cuántas; al cerrar se devuelven a DOSIS_ATRASADA las que el brote había escalado y se descartan las demás (RN-20).
 /// </summary>
 [Collection("api")]
 public class BrotesTests(AppFactory app) : IAsyncLifetime
@@ -234,6 +234,26 @@ public class BrotesTests(AppFactory app) : IAsyncLifetime
         var lista = await Json(await c.GetAsync("/api/brotes"));
         var fila = lista.GetProperty("brotes").EnumerateArray().Single(b => b.GetProperty("idBrote").GetInt32() == id);
         Assert.Equal("CERRADO", fila.GetProperty("estado").GetString());
+    }
+
+    [Fact]
+    public async Task Cerrar_devuelve_a_DOSIS_ATRASADA_las_alertas_que_el_brote_habia_escalado()
+    {
+        var c = await app.SesionComoAsync("admin");
+        var id = await Declarar(c);
+        var antes = await Pendientes(id);
+        var escaladas = await Ids($"SELECT IdAlerta FROM vac.Alerta WHERE IdBrote = {id} AND TipoAlerta = 'ZONA_BROTE' AND Estado = 'PENDIENTE'");
+        var deLaZona = escaladas.Intersect(escalables).ToList();
+        Assert.True(deLaZona.Count > 0, "Tarata debe tener alertas de atraso que el brote escale");
+
+        var r = await Json(await Exito(await c.PostAsJsonAsync($"/api/brotes/{id}/cerrar", new { })));
+
+        var ids = string.Join(',', deLaZona);
+        var vueltas = (int)(await Sql($"SELECT COUNT(*) FROM vac.Alerta WHERE IdAlerta IN ({ids}) AND TipoAlerta = 'DOSIS_ATRASADA' AND Estado = 'PENDIENTE' AND IdBrote IS NULL"))!;
+        Assert.True(deLaZona.Count == vueltas, $"alertas escaladas={deLaZona.Count}, de vuelta a DOSIS_ATRASADA={vueltas}; respuesta={r}");
+        Assert.True(r.GetProperty("alertasRestauradas").GetInt32() >= deLaZona.Count, r.ToString());
+        Assert.Equal(antes, r.GetProperty("alertasRestauradas").GetInt32() + r.GetProperty("alertasDescartadas").GetInt32());
+        Assert.Equal(0, await Pendientes(id));
     }
 
     [Fact]

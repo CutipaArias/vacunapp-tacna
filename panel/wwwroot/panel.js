@@ -190,10 +190,10 @@ function prepararBrotes() {
   $('#bro-tbl').onclick = async e => {
     const b = e.target.closest('button[data-id]');
     if (!b) return;
-    if (!confirm('¿Cerrar este brote? Se descartarán sus alertas pendientes.')) return;
+    if (!confirm('¿Cerrar este brote? Las alertas por dosis atrasada vuelven a su estado anterior y las demás se descartan.')) return;
     try {
       const r = await api(`/api/brotes/${b.dataset.id}/cerrar`, json({}));
-      aviso(true, `Brote cerrado. Se descartaron ${fmt(r.alertasDescartadas)} alertas.`);
+      aviso(true, `Brote cerrado. ${fmt(r.alertasRestauradas)} alertas vuelven a «dosis atrasada» y ${fmt(r.alertasDescartadas)} se descartan.`);
       await cargarBrotes();
     } catch (err) { aviso(false, err.message); }
   };
