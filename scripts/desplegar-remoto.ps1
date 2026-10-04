@@ -8,12 +8,20 @@
     crear ni borrar bases, se omite el bloque DROP/CREATE DATABASE de 01_esquema.sql y se trabaja sobre la base
     indicada. Al final deja el modelo de recuperación en SIMPLE y encoge el archivo de registro (límite de 1 GB).
     Si la base ya contiene el esquema [vac] se detiene sin tocar nada.
+
+    Modo -Produccion: carga esquema, catálogos, vistas, procedimientos, triggers, seguridad, stock, agenda y estadísticas,
+    SIN 06_datos_prueba.sql ni 07_pruebas.sql, y ejecuta 12_produccion.sql, que retira las cuentas y campañas de
+    demostración. Queda un único usuario, "admin", sin clave en la base: la aplicación se la asigna al arrancar desde
+    Seed:AdminPassword (configuración del hosting, nunca el repositorio). No se combina con -Pruebas.
 .EXAMPLE
     ./scripts/desplegar-remoto.ps1                # servidor tipo db71556.public.databaseasp.net
     ./scripts/desplegar-remoto.ps1 -Pruebas       # además ejecuta 07_pruebas.sql
+    ./scripts/desplegar-remoto.ps1 -Produccion    # base real: sin datos de prueba, solo el administrador
 #>
+[CmdletBinding()]   # sin esto, un parámetro mal escrito se ignoraría en silencio y la carga seguiría con otro modo
 param(
     [switch]$Pruebas,
+    [switch]$Produccion,
     [string]$Servidor,
     [string]$Base,
     [string]$Usuario,
@@ -22,6 +30,8 @@ param(
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
 $dirBd = Join-Path $repo 'database'
+
+if ($Produccion -and $Pruebas) { throw '-Produccion y -Pruebas no se pueden combinar: la carga de producción no incluye datos de prueba.' }
 
 if (-not (Get-Command sqlcmd -ErrorAction SilentlyContinue)) {
     throw 'No se encontró sqlcmd. Instale las herramientas de línea de comandos de SQL Server.'
@@ -38,6 +48,8 @@ if ($base -notmatch '^[A-Za-z0-9_\-\.]+$') { throw 'Nombre de base no válido (u
 # Orden idéntico a desplegar.ps1 (07_pruebas va al final: verifica también 08 y 09).
 $scripts = '01_esquema', '02_catalogos', '03_vistas', '04_procedimientos', '05_triggers', '06_datos_prueba', '08_seguridad', '09_stock', '10_agenda', '11_estadisticas'
 if ($Pruebas) { $scripts += '07_pruebas' }
+# Producción: sin 06 (20 000 pacientes simulados) ni 07; 12 retira lo de demostración y va antes de actualizar estadísticas.
+if ($Produccion) { $scripts = '01_esquema', '02_catalogos', '03_vistas', '04_procedimientos', '05_triggers', '08_seguridad', '09_stock', '10_agenda', '12_produccion', '11_estadisticas' }
 
 $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($segura)
 $temporal = $null
@@ -88,7 +100,15 @@ IF @log IS NOT NULL DBCC SHRINKFILE (@log, 1);
 
     Write-Host '> Tamaño final de la base:'
     Invoke-Sql "SET NOCOUNT ON; SELECT type_desc, CAST(size * 8 / 1024.0 AS DECIMAL(10,1)) AS MB FROM sys.database_files;"
-    Write-Host "> Base '$base' lista en $servidor. Cambie las contraseñas semilla desde la aplicación antes de compartir el enlace."
+    if ($Produccion) {
+        # Comprobación final: solo el administrador y ningún dato de pacientes.
+        $resumen = sqlcmd -S $servidor -d $base -U $usuario -N -C -b -h -1 -W -Q "SET NOCOUNT ON; SELECT CONCAT((SELECT COUNT(*) FROM vac.Usuario WHERE NombreUsuario = 'admin'), '/', (SELECT COUNT(*) FROM vac.Usuario), '/', (SELECT COUNT(*) FROM vac.Paciente), '/', (SELECT COUNT(*) FROM vac.DosisAplicada));"
+        if ($LASTEXITCODE -ne 0 -or ($resumen | Select-Object -First 1).Trim() -ne '1/1/0/0') { throw 'La base no quedó como producción (se esperaba solo el administrador y ningún paciente ni dosis).' }
+        Write-Host "> Base '$base' lista en $servidor (producción). Solo existe el usuario 'admin', sin clave: defina Seed:AdminPassword en la configuración de la aplicación; al primer arranque se la asigna. Desde el panel cree las demás cuentas."
+    }
+    else {
+        Write-Host "> Base '$base' lista en $servidor. Cambie las contraseñas semilla desde la aplicación antes de compartir el enlace."
+    }
 }
 finally {
     Remove-Item Env:\SQLCMDPASSWORD -ErrorAction SilentlyContinue

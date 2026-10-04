@@ -196,11 +196,12 @@ Plan: [plan.md](plan.md) · Spec: [../SPEC.md](../SPEC.md)
 ---
 ## Fase 6 – `despliegue`
 
-- [ ] **T6.1 Reconocimiento de MonsterASP.NET y script de BD de producción** (M)
+- [~] **T6.1 Reconocimiento de MonsterASP.NET y script de BD de producción** (M) — PARTE LOCAL HECHA; falta la ejecución remota con tus credenciales
   - Acceptance: confirmo (con tus datos de acceso) versión de runtime .NET, límites reales y forma de ejecutar scripts; `00_crear_bd.sql` separado de los scripts idempotentes; plan de carga de datos que quepa en 1 GB.
   - Verify: scripts corren sin error dos veces contra la BD remota; el tamaño de datos queda < 1 GB
   - Files: `database/*.sql`, `desplegar.ps1` (modo `-Remoto`), `docs/despliegue.md`
   - Deps: Checkpoint F · **Requiere que tú proporciones credenciales; yo no las introduzco en formularios ni las guardo en el repo**
+  - Resultado (03/10/2026): `database/12_produccion.sql` y modo `-Produccion` en `scripts/desplegar-remoto.ps1` (sin datos de prueba, solo `admin` sin clave, se detiene si ya existe `[vac]`, no se combina con `-Pruebas`). `tests/produccion.ps1` contra una base local vacía: 32/32 (rojo antes del cambio: el parámetro se ignoraba y se cargaban los datos de prueba). Pendiente de ti: ejecutarlo contra la base de MonsterASP.NET y confirmar runtime, límites y tamaño final allí.
 
 - [ ] **T6.2 Publicar la aplicación** (M)
   - Acceptance: `dotnet publish` generado; cadena de conexión y secretos fuera del repo (variables de entorno / `appsettings.Production.json` ignorado por git); app accesible por HTTPS; login funciona.
