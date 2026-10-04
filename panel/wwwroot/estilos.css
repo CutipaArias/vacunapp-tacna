@@ -71,3 +71,9 @@ body.login { min-height: 100vh; display: grid; place-items: center; }
 #citas .paso[hidden], #citas .filters[hidden], #citas label[hidden], #citas div[hidden] { display: none; }
 #b-c-reservar { width: 100%; }
 @media (min-width: 700px) { #citas .paso label, #citas .paso select { width: auto; min-width: 320px; } #b-c-reservar { width: auto; } }
+
+/* ---- Tablero de cobertura ---- */
+.tablero { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; }
+.chart-box { position: relative; height: 340px; }
+.kpi.sem-ok b { color: var(--ok); } .kpi.sem-warn b { color: var(--warn); } .kpi.sem-bad b { color: var(--bad); }
+@media (max-width: 800px) { .tablero { grid-template-columns: 1fr; } .chart-box { height: 300px; } }

@@ -1,0 +1,6 @@
+chart.umd.js: Chart.js 4.5.1 (licencia MIT, ver LICENSE-chartjs.md).
+Origen: https://registry.npmjs.org/chart.js/-/chart.js-4.5.1.tgz, archivo package/dist/chart.umd.js.
+Integridad del paquete verificada contra el registro:
+sha512-GIjfiT9dbmHRiYi6Nl2yFCq7kkwdkp1W/lp2J99rX0yo9tgJGn3lKQATztIjb5tVtevcBtIdICNWqlq5+E8/Pw==
+Unica modificacion: se quito la ultima linea (//# sourceMappingURL) para que el navegador no pida un .map que no se publica.
+Se sirve desde el propio sitio porque la politica CSP del panel solo admite scripts 'self'.

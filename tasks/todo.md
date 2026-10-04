@@ -176,10 +176,11 @@ Plan: [plan.md](plan.md) · Spec: [../SPEC.md](../SPEC.md)
   - Resultado (03/10/2026): 21 pruebas de API, SQL 119/119, suite 265/265. UI no verificada visualmente (sin sesión).
   - Deps: T5.1
 
-- [ ] **T5.3 Dashboard de cobertura con semáforos (RF-13, CU12, RN-21, RNF-01)** (M)
-  - Acceptance: gráficos Chart.js por distrito, semáforo ÓPTIMA/ACEPTABLE/CRÍTICA, riesgo de sarampión ALTO/MEDIO; jefe ve solo su zona; respuesta < 2 s con 20 000 pacientes / 300 000+ dosis.
+- [x] **T5.3 Dashboard de cobertura con semáforos (RF-13, CU12, RN-21, RNF-01)** (M)
+  - Acceptance: gráficos Chart.js por distrito, semáforo ÓPTIMA/ACEPTABLE/CRÍTICA, riesgo de sarampión ALTO/MEDIO; respuesta < 2 s con 20 000 pacientes / 300 000+ dosis. **Cambio aprobado:** solo epidemiólogo y administrador (se descarta «el jefe ve solo su zona»).
   - Verify: medición con `SET STATISTICS TIME` y tiempo de la API; xUnit de forma del JSON
-  - Files: `panel/Vigilancia/DashboardEndpoints.cs`, `panel/wwwroot/dashboard.html`, `panel/wwwroot/dashboard.js`, `tests/…`
+  - Files: `panel/Vigilancia/DashboardEndpoints.cs`, pestaña «Tablero» en `panel/wwwroot/index.html`, `panel/wwwroot/dashboard.js`, `panel/wwwroot/vendor/` (Chart.js), `tests/VacunApp.Tests/DashboardTests.cs`
+  - Resultado (03/10/2026): 18 pruebas de API nuevas (forma, orden, semáforo = umbrales de la base, riesgo = vista, 403/401, 400 sin detalles internos, < 2 s); suite 299/299. Reporte 62 ms + vista de sarampión 168 ms con 20 000 pacientes. Interfaz comprobada en el navegador con respuestas simuladas de la API (sin sesión real): no verificada visualmente con una sesión iniciada.
   - Deps: T5.1
 
 - [ ] **T5.4 Campañas con metas y avance (RF-14, CU13)** (S)

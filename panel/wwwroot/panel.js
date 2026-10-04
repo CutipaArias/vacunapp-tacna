@@ -27,7 +27,7 @@ const tag = v => `<span class="tag ${esc(v)}">${esc(v)}</span>`;
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
   document.querySelectorAll('nav button, section').forEach(x => x.classList.remove('on'));
   b.classList.add('on'); $('#' + b.dataset.tab).classList.add('on');
-  ({ cobertura: cargarCobertura, alertas: cargarAlertas, pendientes: cargarPendientes, brotes: cargarBrotes, campanas: cargarCampanas, citas: cargarCitas, 'citas-dia': cargarCitasDia, stock: cargarStock, horarios: cargarHorarios, usuarios: cargarUsuarios, auditoria: cargarAuditoria })[b.dataset.tab]?.();
+  ({ dashboard: cargarDashboard, cobertura: cargarCobertura, alertas: cargarAlertas, pendientes: cargarPendientes, brotes: cargarBrotes, campanas: cargarCampanas, citas: cargarCitas, 'citas-dia': cargarCitasDia, stock: cargarStock, horarios: cargarHorarios, usuarios: cargarUsuarios, auditoria: cargarAuditoria })[b.dataset.tab]?.();
 });
 
 async function cargarResumen() {
@@ -619,6 +619,7 @@ async function init() {
   $('#pe-dis').innerHTML += cat.distritos.map(d => `<option value="${esc(d.Ubigeo)}">${esc(d.Nombre)}</option>`).join('');
   $('#pe-vac').innerHTML += [...new Set(cat.esquema.map(e => e.Codigo))].map(c => `<option>${esc(c)}</option>`).join('');
   $('#pe-dis-l').hidden = yo.idEstablecimiento != null;
+  if (tabs.includes('dashboard')) prepararDashboard();
   if (tabs.includes('alertas')) prepararAlertas();
   if (tabs.includes('brotes')) prepararBrotes();
   if (tabs.includes('citas')) prepararCitas();

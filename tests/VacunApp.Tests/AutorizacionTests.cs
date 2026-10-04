@@ -18,6 +18,7 @@ public class AutorizacionTests(AppFactory app)
     [InlineData("/api/sarampion")]
     [InlineData("/api/cobertura")]
     [InlineData("/api/campanas")]
+    [InlineData("/api/dashboard")]
     public async Task Consultas_regionales_solo_para_admin_y_epidemiologo(string url)
     {
         foreach (var (usuario, esperado) in new[]
@@ -47,6 +48,7 @@ public class AutorizacionTests(AppFactory app)
     [InlineData("/api/alertas")]
     [InlineData("/api/pendientes?ubigeo=230104&top=5")]
     [InlineData("/api/campanas")]
+    [InlineData("/api/dashboard")]
     [InlineData("/api/paciente/70000001")]
     [InlineData("/api/catalogos")]
     public async Task Sin_sesion_todos_los_endpoints_devuelven_401(string url)

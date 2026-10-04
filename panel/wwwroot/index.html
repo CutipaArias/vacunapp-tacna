@@ -19,6 +19,7 @@
 </header>
 <nav id="menu" aria-label="Secciones">
   <button data-tab="resumen" data-roles="ADMINISTRADOR EPIDEMIOLOGO" hidden>Resumen</button>
+  <button data-tab="dashboard" data-roles="ADMINISTRADOR EPIDEMIOLOGO" hidden>Tablero</button>
   <button data-tab="cobertura" data-roles="ADMINISTRADOR EPIDEMIOLOGO" hidden>Cobertura por distrito</button>
   <button data-tab="alertas" data-roles="ADMINISTRADOR EPIDEMIOLOGO JEFE_ESTABLECIMIENTO VACUNADOR" hidden>Alertas</button>
   <button data-tab="pendientes" data-roles="ADMINISTRADOR EPIDEMIOLOGO JEFE_ESTABLECIMIENTO VACUNADOR" hidden>Pendientes</button>
@@ -41,6 +42,35 @@
       <h2>Cobertura contra el sarampión (SPR) por distrito <span class="time" id="t-sar"></span></h2>
       <p>Porcentaje de niños elegibles con cada dosis. La línea marca la meta del 95 %. Riesgo ALTO: brote activo o SPR1 &lt; 80 %.</p>
       <div class="tbl"><table id="sar"></table></div>
+    </div>
+  </section>
+
+  <section id="dashboard">
+    <div class="card">
+      <h2>Tablero de cobertura <span class="time" id="t-dash"></span></h2>
+      <p>Semáforo por distrito (RN-21): ÓPTIMA desde 95 %, ACEPTABLE desde 80 %, CRÍTICA por debajo de 80 %. Riesgo de sarampión: ALTO con brote activo o SPR 1.a dosis &lt; 80 %; MEDIO con SPR 2.a dosis &lt; 95 %.</p>
+      <div class="filters">
+        <label>Vacuna <select id="d-vac"></select></label>
+        <label>Dosis <select id="d-dos"><option value="">Esquema completo</option><option>1</option><option>2</option><option>3</option></select></label>
+        <button class="b" id="b-dash" type="button">Consultar</button>
+      </div>
+      <div id="dash-msg" role="alert"></div>
+      <div class="kpis" id="dash-kpis"></div>
+    </div>
+    <div class="tablero">
+      <div class="card">
+        <h2>Cobertura por distrito</h2>
+        <div class="chart-box"><canvas id="g-dist" role="img" aria-label="Cobertura por distrito frente a la meta de 95 % y al mínimo aceptable de 80 %. Los mismos datos están en la tabla inferior."></canvas></div>
+      </div>
+      <div class="card">
+        <h2>Distritos por semáforo</h2>
+        <div class="chart-box"><canvas id="g-sem" role="img" aria-label="Cantidad de distritos en cada nivel del semáforo. Los mismos datos están en los indicadores superiores."></canvas></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Detalle por distrito</h2>
+      <p>De menor a mayor cobertura, para priorizar dónde vacunar primero.</p>
+      <div class="tbl"><table id="dash-tbl"></table></div>
     </div>
   </section>
 
@@ -318,6 +348,8 @@
     </div>
   </section>
 </main>
+<script src="/vendor/chart.umd.js"></script>
+<script src="/dashboard.js"></script>
 <script src="/panel.js"></script>
 </body>
 </html>
