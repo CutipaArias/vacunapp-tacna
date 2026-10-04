@@ -83,7 +83,17 @@ app.Use(async (ctx, next) =>
 });
 
 app.UseDefaultFiles();
-app.UseStaticFiles();
+// Los archivos de texto declaran UTF-8 en la cabecera: la interfaz lleva tildes y no se debe depender de que el navegador adivine.
+app.UseStaticFiles(new StaticFileOptions
+{
+    OnPrepareResponse = ctx =>
+    {
+        var tipo = ctx.Context.Response.Headers.ContentType.ToString();
+        if (tipo.Length > 0 && !tipo.Contains("charset", StringComparison.OrdinalIgnoreCase) &&
+            (tipo.StartsWith("text/", StringComparison.OrdinalIgnoreCase) || tipo.Contains("javascript", StringComparison.OrdinalIgnoreCase)))
+            ctx.Context.Response.Headers.ContentType = tipo + "; charset=utf-8";
+    }
+});
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
@@ -101,6 +111,7 @@ app.MapAtencion();
 app.MapBrotes();
 app.MapAlertas();
 app.MapDashboard();
+app.MapCampanas();
 
 // RN-22: las consultas regionales son solo del epidemiólogo y el administrador.
 var regional = app.MapGroup("/api").RequireAuthorization(Politicas.Regional);
@@ -120,9 +131,6 @@ regional.MapGet("/sarampion", async () =>
 regional.MapGet("/cobertura", async (string? vacuna, byte? dosis, string? provincia) =>
     Results.Ok((await db.ExecAsync("vac.usp_ReporteCoberturaDistrito",
         ("@CodigoVacuna", vacuna), ("@NumeroDosis", dosis), ("@Provincia", provincia)))[0]));
-
-regional.MapGet("/campanas", async () =>
-    Results.Ok((await db.QueryAsync("SELECT * FROM vac.vw_AvanceCampana ORDER BY IdCampana, PorcentajeAvance"))[0]));
 
 app.MapGet("/api/catalogos", async (ClaimsPrincipal user) =>
 {

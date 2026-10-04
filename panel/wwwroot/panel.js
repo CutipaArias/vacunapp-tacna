@@ -111,13 +111,67 @@ async function cargarPendientes() {
   ], r);
 }
 
+// ---- Campañas (RF-14, CU13): las reglas viven en la base; aquí se muestran y se envían ----
+let metasNuevas = [];
+
 async function cargarCampanas() {
   const r = await api('/api/campanas');
+  $('#t-cam').textContent = `· ${r.filter(c => c.estado === 'VIGENTE').length} vigentes · ${r.__ms} ms`;
   table($('#cam'), [
-    { h: 'Campaña', k: 'Campana' }, { h: 'Periodo', f: r => `${fecha(r.FechaInicio)} → ${fecha(r.FechaFin)}` },
-    { h: 'Distrito', k: 'Distrito' }, { h: 'Meta', n: 1, f: r => fmt(r.MetaDosis) },
-    { h: 'Aplicadas', n: 1, f: r => fmt(r.DosisAplicadas) }, { h: 'Avance', f: r => bar(r.PorcentajeAvance) }
+    { h: 'Campaña', f: c => `<b>${esc(c.nombre)}</b>` + (c.descripcion ? `<br><small class="muted">${esc(c.descripcion)}</small>` : '') },
+    { h: 'Periodo', f: c => `${fecha(c.fechaInicio)} → ${fecha(c.fechaFin)}` }, { h: 'Estado', f: c => tag(c.estado) },
+    { h: 'Meta', n: 1, f: c => fmt(c.metaTotal) }, { h: 'Aplicadas', n: 1, f: c => fmt(c.dosisAplicadas) },
+    { h: 'Avance', f: c => bar(c.porcentajeAvance).replace('class="bar"', 'class="bar plano"') },   // sin la marca del 95 %: la meta de una campaña es el 100 %,
+    { h: 'Por vacuna', f: c => c.porVacuna.length ? c.porVacuna.map(v => `${esc(v.vacuna)} ${fmt(v.dosis)}`).join(' · ') : '—' },
+    { h: 'Distritos', f: c => `<details><summary>${c.distritos.length}</summary>` +
+        c.distritos.map(d => `<div>${esc(d.distrito)}: ${fmt(d.dosisAplicadas)} de ${fmt(d.metaDosis)} (${pct(d.porcentajeAvance)})</div>`).join('') + '</details>' },
+    { h: '', f: c => c.estado === 'VIGENTE' ? `<button class="b sec" type="button" data-id="${c.idCampana}" data-nombre="${esc(c.nombre)}">Cerrar</button>` : '' }
   ], r);
+}
+
+function prepararCampanas() {
+  const aviso = (ok, t) => $('#cam-msg').innerHTML = `<div class="msg ${ok ? 'ok' : 'err'}">${esc(t)}</div>`;
+  const pintar = () => $('#c-metas').innerHTML = metasNuevas.length
+    ? metasNuevas.map((m, i) => `<li>${esc(m.nombre)}: ${fmt(m.metaDosis)} dosis <button class="b sec" type="button" data-i="${i}" aria-label="Quitar ${esc(m.nombre)}">Quitar</button></li>`).join('')
+    : '<li class="muted">Aún no agregó distritos.</li>';
+  $('#c-dis').innerHTML = cat.distritos.map(d => `<option value="${esc(d.Ubigeo)}">${esc(d.Nombre)}</option>`).join('');
+  $('#c-ini').value = hoyISO(); $('#c-fin').value = hoyISO(30);
+  pintar();
+
+  $('#b-c-add').onclick = () => {
+    const meta = Number($('#c-meta').value), ubigeo = $('#c-dis').value;
+    if (!Number.isInteger(meta) || meta < 1 || meta > 1000000) return aviso(false, 'La meta debe ser un número entero entre 1 y 1 000 000.');
+    if (metasNuevas.some(m => m.ubigeo === ubigeo)) return aviso(false, 'Ese distrito ya está en la lista.');
+    metasNuevas.push({ ubigeo, nombre: $('#c-dis').selectedOptions[0].textContent, metaDosis: meta });
+    $('#cam-msg').innerHTML = ''; pintar();
+  };
+  $('#c-metas').onclick = e => {
+    const b = e.target.closest('button[data-i]');
+    if (b) { metasNuevas.splice(+b.dataset.i, 1); pintar(); }
+  };
+  $('#f-cam').onsubmit = async e => {
+    e.preventDefault();
+    if (!metasNuevas.length) return aviso(false, 'Agregue al menos un distrito con su meta.');
+    try {
+      await api('/api/campanas', json({
+        nombre: $('#c-nom').value, descripcion: $('#c-des').value, fechaInicio: $('#c-ini').value, fechaFin: $('#c-fin').value,
+        metas: metasNuevas.map(m => ({ ubigeo: m.ubigeo, metaDosis: m.metaDosis }))
+      }));
+      aviso(true, `Campaña «${$('#c-nom').value.trim()}» creada.`);
+      metasNuevas = []; pintar(); $('#f-cam').reset(); $('#c-ini').value = hoyISO(); $('#c-fin').value = hoyISO(30);
+      await cargarCampanas();
+    } catch (err) { aviso(false, err.message); }
+  };
+  $('#cam').onclick = async e => {
+    const b = e.target.closest('button[data-id]');
+    if (!b) return;
+    if (!confirm(`¿Cerrar la campaña «${b.dataset.nombre}»? Terminará hoy y desde mañana ya no admitirá dosis.`)) return;
+    try {
+      await api(`/api/campanas/${b.dataset.id}/cerrar`, json({}));
+      aviso(true, `Campaña «${b.dataset.nombre}» cerrada.`);
+      await cargarCampanas();
+    } catch (err) { aviso(false, err.message); }
+  };
 }
 
 async function buscarPaciente() {
@@ -622,6 +676,7 @@ async function init() {
   if (tabs.includes('dashboard')) prepararDashboard();
   if (tabs.includes('alertas')) prepararAlertas();
   if (tabs.includes('brotes')) prepararBrotes();
+  if (tabs.includes('campanas')) prepararCampanas();
   if (tabs.includes('citas')) prepararCitas();
   if (tabs.includes('citas-dia')) prepararCitasDia();
   if (tabs.includes('stock')) prepararStock();

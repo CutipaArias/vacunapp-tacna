@@ -143,9 +143,31 @@
 
   <section id="campanas">
     <div class="card">
-      <h2>Avance de campañas por distrito</h2>
-      <p>Dosis aplicadas dentro de cada campaña frente a la meta planificada.</p>
+      <h2>Campañas <span class="time" id="t-cam"></span></h2>
+      <p>Dosis aplicadas dentro de cada campaña frente a la meta de cada distrito. Cerrar una campaña la termina hoy; desde mañana ya no admite dosis.</p>
       <div class="tbl"><table id="cam"></table></div>
+      <div id="cam-msg" role="alert"></div>
+    </div>
+    <div class="card">
+      <h2>Nueva campaña</h2>
+      <p>Defina el periodo y la meta de dosis de cada distrito. Las dosis se vinculan a la campaña al registrarlas, dentro de su periodo.</p>
+      <form id="f-cam" autocomplete="off">
+        <div class="filters">
+          <label>Nombre <input id="c-nom" maxlength="100" required></label>
+          <label>Inicio <input id="c-ini" type="date" required></label>
+          <label>Fin <input id="c-fin" type="date" required></label>
+        </div>
+        <div class="filters">
+          <label>Descripción (opcional) <input id="c-des" maxlength="300" size="50"></label>
+        </div>
+        <div class="filters">
+          <label>Distrito <select id="c-dis"></select></label>
+          <label>Meta de dosis <input id="c-meta" type="number" min="1" max="1000000" value="100"></label>
+          <button class="b sec" id="b-c-add" type="button">Agregar distrito</button>
+        </div>
+        <ul id="c-metas" class="lista"></ul>
+        <button class="b" type="submit">Crear campaña</button>
+      </form>
     </div>
   </section>
 

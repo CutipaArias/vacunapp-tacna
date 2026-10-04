@@ -1416,6 +1416,154 @@ SET @n = DATEDIFF(MILLISECOND, @t0, SYSDATETIME());
 INSERT @R VALUES ('usp_ListarPendientes', 'RNF-01: pendientes de una vacuna en menos de 2 s', 'CUMPLE', IIF(@n < 2000, 'CUMPLE', CONCAT(@n, ' ms')));
 DROP TABLE #lp2;
 
+/* =================== Vigilancia: campañas (RF-14; CU13) =================== */
+DECLARE @IdCamp SMALLINT, @FinCamp DATE;
+DECLARE @Hace3 DATE = DATEADD(DAY, -3, @Hoy), @Hace5 DATE = DATEADD(DAY, -5, @Hoy), @Hace10 DATE = DATEADD(DAY, -10, @Hoy),
+        @Hace30 DATE = DATEADD(DAY, -30, @Hoy), @Mas5 DATE = DATEADD(DAY, 5, @Hoy), @Mas30 DATE = DATEADD(DAY, 30, @Hoy);
+DECLARE @MetasOk NVARCHAR(MAX) = N'[{"ubigeo":"230104","metaDosis":500},{"ubigeo":"230401","metaDosis":200}]';
+
+/* H57. Crear una campaña con metas por distrito */
+BEGIN TRANSACTION;
+BEGIN TRY
+    EXEC vac.usp_CrearCampana 'Prueba SPR', @Hoy, @FechaManana, 'Seguimiento', @MetasOk, @IdCamp OUTPUT;
+    SET @Err = CONCAT((SELECT COUNT(*) FROM vac.CampanaDistrito WHERE IdCampana = @IdCamp), ' metas, ',
+                      (SELECT SUM(MetaDosis) FROM vac.CampanaDistrito WHERE IdCampana = @IdCamp), ' dosis');
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_CrearCampana', 'Crea la campaña con sus metas por distrito', '2 metas, 700 dosis', @Err);
+
+/* H58. El nombre es obligatorio */
+BEGIN TRANSACTION;
+BEGIN TRY
+    EXEC vac.usp_CrearCampana '   ', @Hoy, @FechaManana, NULL, @MetasOk, @IdCamp OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_CrearCampana', 'Rechaza un nombre en blanco', '50060', @Err);
+
+/* H59. El fin no puede ser anterior al inicio (error propio, no el CHECK) */
+BEGIN TRANSACTION;
+BEGIN TRY
+    EXEC vac.usp_CrearCampana 'Prueba SPR', @Hoy, @FechaAyer, NULL, @MetasOk, @IdCamp OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_CrearCampana', 'Rechaza un fin anterior al inicio', '50061', @Err);
+
+/* H60. Una campaña con el mismo nombre y fecha de inicio es un duplicado */
+BEGIN TRANSACTION;
+EXEC vac.usp_CrearCampana 'Prueba SPR', @Hoy, @FechaManana, NULL, @MetasOk, @IdCamp OUTPUT;
+BEGIN TRY
+    EXEC vac.usp_CrearCampana 'Prueba SPR', @Hoy, @FechaManana, NULL, @MetasOk, @IdCamp OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_CrearCampana', 'Rechaza una campaña duplicada', '50062', @Err);
+
+/* H61. Sin metas, o con metas que no son JSON, no se crea la campaña */
+BEGIN TRANSACTION;
+BEGIN TRY
+    EXEC vac.usp_CrearCampana 'Prueba SPR', @Hoy, @FechaManana, NULL, N'[]', @IdCamp OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_CrearCampana', 'Rechaza una lista de metas vacía', '50063', @Err);
+BEGIN TRANSACTION;
+BEGIN TRY
+    EXEC vac.usp_CrearCampana 'Prueba SPR', @Hoy, @FechaManana, NULL, N'no es json', @IdCamp OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_CrearCampana', 'Rechaza metas que no son JSON', '50063', @Err);
+
+/* H62. Un ubigeo inexistente */
+BEGIN TRANSACTION;
+BEGIN TRY
+    EXEC vac.usp_CrearCampana 'Prueba SPR', @Hoy, @FechaManana, NULL, N'[{"ubigeo":"999999","metaDosis":10}]', @IdCamp OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_CrearCampana', 'Rechaza un ubigeo inexistente', '50064', @Err);
+
+/* H63. La meta debe ser un entero positivo (0, texto y excesivo) */
+BEGIN TRANSACTION;
+BEGIN TRY
+    EXEC vac.usp_CrearCampana 'Prueba SPR', @Hoy, @FechaManana, NULL, N'[{"ubigeo":"230104","metaDosis":0}]', @IdCamp OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_CrearCampana', 'Rechaza una meta de 0', '50065', @Err);
+BEGIN TRANSACTION;
+BEGIN TRY
+    EXEC vac.usp_CrearCampana 'Prueba SPR', @Hoy, @FechaManana, NULL, N'[{"ubigeo":"230104","metaDosis":"abc"}]', @IdCamp OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_CrearCampana', 'Rechaza una meta que no es un número', '50065', @Err);
+BEGIN TRANSACTION;
+BEGIN TRY
+    EXEC vac.usp_CrearCampana 'Prueba SPR', @Hoy, @FechaManana, NULL, N'[{"ubigeo":"230104","metaDosis":99999999999}]', @IdCamp OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_CrearCampana', 'Rechaza una meta mayor al máximo', '50065', @Err);
+
+/* H64. Un distrito no puede repetirse en las metas */
+BEGIN TRANSACTION;
+BEGIN TRY
+    EXEC vac.usp_CrearCampana 'Prueba SPR', @Hoy, @FechaManana, NULL, N'[{"ubigeo":"230104","metaDosis":10},{"ubigeo":"230104","metaDosis":20}]', @IdCamp OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_CrearCampana', 'Rechaza un distrito repetido', '50066', @Err);
+
+/* H65. Cerrar una campaña vigente la termina hoy */
+BEGIN TRANSACTION;
+BEGIN TRY
+    EXEC vac.usp_CrearCampana 'Prueba SPR', @Hace5, @Mas30, NULL, @MetasOk, @IdCamp OUTPUT;
+    EXEC vac.usp_CerrarCampana @IdCamp, @FinCamp OUTPUT;
+    SET @Err = IIF(@FinCamp = @Hoy AND (SELECT FechaFin FROM vac.Campana WHERE IdCampana = @IdCamp) = @Hoy, 'OK', 'fecha distinta');
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_CerrarCampana', 'Cerrar una campaña vigente fija su fin en hoy', 'OK', @Err);
+
+/* H66. Una campaña inexistente */
+BEGIN TRANSACTION;
+BEGIN TRY
+    EXEC vac.usp_CerrarCampana 0, @FinCamp OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_CerrarCampana', 'Rechaza una campaña inexistente', '50067', @Err);
+
+/* H67. Una campaña que todavía no empezó no se cierra */
+BEGIN TRANSACTION;
+EXEC vac.usp_CrearCampana 'Prueba SPR', @Mas5, @Mas30, NULL, @MetasOk, @IdCamp OUTPUT;
+BEGIN TRY
+    EXEC vac.usp_CerrarCampana @IdCamp, @FinCamp OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_CerrarCampana', 'Rechaza cerrar una campaña que no empezó', '50068', @Err);
+
+/* H68. Una campaña ya terminada, o que termina hoy, no se cierra otra vez */
+BEGIN TRANSACTION;
+EXEC vac.usp_CrearCampana 'Prueba SPR', @Hace30, @Hace10, NULL, @MetasOk, @IdCamp OUTPUT;
+BEGIN TRY
+    EXEC vac.usp_CerrarCampana @IdCamp, @FinCamp OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_CerrarCampana', 'Rechaza cerrar una campaña ya terminada', '50069', @Err);
+BEGIN TRANSACTION;
+EXEC vac.usp_CrearCampana 'Prueba SPR', @Hace3, @Hoy, NULL, @MetasOk, @IdCamp OUTPUT;
+BEGIN TRY
+    EXEC vac.usp_CerrarCampana @IdCamp, @FinCamp OUTPUT;
+    SET @Err = 'sin error';
+END TRY BEGIN CATCH SET @Err = CAST(ERROR_NUMBER() AS VARCHAR); END CATCH;
+IF @@TRANCOUNT > 0 ROLLBACK;
+INSERT @R VALUES ('usp_CerrarCampana', 'Rechaza cerrar una campaña que termina hoy', '50069', @Err);
+
 SELECT Caso, IIF(Esperado = Obtenido, 'OK', 'FALLA') AS Resultado, Objeto, Prueba, Esperado, Obtenido
 FROM @R ORDER BY Caso;
 SELECT SUM(IIF(Esperado = Obtenido, 1, 0)) AS Correctas, COUNT(*) AS Total FROM @R;

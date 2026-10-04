@@ -183,10 +183,11 @@ Plan: [plan.md](plan.md) · Spec: [../SPEC.md](../SPEC.md)
   - Resultado (03/10/2026): 18 pruebas de API nuevas (forma, orden, semáforo = umbrales de la base, riesgo = vista, 403/401, 400 sin detalles internos, < 2 s); suite 299/299. Reporte 62 ms + vista de sarampión 168 ms con 20 000 pacientes. Interfaz comprobada en el navegador con respuestas simuladas de la API (sin sesión real): no verificada visualmente con una sesión iniciada.
   - Deps: T5.1
 
-- [ ] **T5.4 Campañas con metas y avance (RF-14, CU13)** (S)
-  - Acceptance: el epidemiólogo crea campañas con metas por distrito y ve el avance (`vw_AvanceCampana`).
-  - Verify: xUnit crear/consultar; 403 para otros roles
-  - Files: `panel/Vigilancia/CampanasEndpoints.cs`, `panel/wwwroot/campanas.html`, `tests/…`
+- [x] **T5.4 Campañas con metas y avance (RF-14, CU13)** (S)
+  - Acceptance: el epidemiólogo y el administrador crean, listan y cierran campañas con metas por distrito y ven el avance (`vw_AvanceCampana`); mismo 403 para los demás roles, exista o no la campaña.
+  - Verify: xUnit crear/consultar/cerrar; 403 para otros roles; casos H57–H68 en `07_pruebas.sql`
+  - Files: `database/04_procedimientos.sql` (`usp_CrearCampana`, `usp_CerrarCampana`, 50060–50069), `panel/Vigilancia/CampanasEndpoints.cs`, pestaña «Campañas» en `panel/wwwroot/index.html` y `panel.js`, `database/07_pruebas.sql`, `tests/VacunApp.Tests/CampanasTests.cs`, `ArchivosEstaticosTests.cs`
+  - Resultado (03/10/2026): 16 casos SQL nuevos (144/144 en la base de desarrollo; rojos antes de crear los procedimientos, error 2812), 38 pruebas de API nuevas (suite 337/337). Sin cambio de esquema: la campaña no guarda vacuna (ver SPEC.md §12). Interfaz comprobada en el navegador con respuestas simuladas (sin sesión real): no verificada visualmente con una sesión iniciada.
   - Deps: T5.3
 
 ### Checkpoint F (vigilancia)

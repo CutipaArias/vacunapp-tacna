@@ -77,3 +77,12 @@ body.login { min-height: 100vh; display: grid; place-items: center; }
 .chart-box { position: relative; height: 340px; }
 .kpi.sem-ok b { color: var(--ok); } .kpi.sem-warn b { color: var(--warn); } .kpi.sem-bad b { color: var(--bad); }
 @media (max-width: 800px) { .tablero { grid-template-columns: 1fr; } .chart-box { height: 300px; } }
+
+/* ---- Campañas ---- */
+.VIGENTE { background: var(--ok-bg); color: var(--ok); }
+.PROGRAMADA { background: var(--warn-bg); color: var(--warn); }
+.FINALIZADA { background: var(--bar); color: var(--muted); }
+ul.lista { list-style: none; padding: 0; margin: 4px 0 12px; display: grid; gap: 6px; }
+ul.lista li { display: flex; align-items: center; gap: 10px; }
+details summary { cursor: pointer; }
+.bar.plano em { display: none; }

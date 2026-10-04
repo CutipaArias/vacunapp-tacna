@@ -385,3 +385,84 @@ BEGIN
         THROW 50041, 'La alerta no existe o ya fue cerrada.', 1;
 END
 GO
+
+/* ---------------------------------------------------------------------
+   10. usp_CrearCampana (RF-14, CU13)
+   Crea una campaña con sus metas de dosis por distrito. @Metas es un arreglo JSON:
+   [{"ubigeo":"230104","metaDosis":500}, ...]. Las dosis se vinculan a la campaña con
+   @IdCampana de usp_RegistrarDosis y solo dentro de su periodo (50014).
+   La campaña no guarda la vacuna: el avance por vacuna sale de las dosis vinculadas.
+   --------------------------------------------------------------------- */
+CREATE OR ALTER PROCEDURE vac.usp_CrearCampana
+    @Nombre      VARCHAR(100),
+    @FechaInicio DATE,
+    @FechaFin    DATE,
+    @Descripcion VARCHAR(300) = NULL,
+    @Metas       NVARCHAR(MAX),
+    @IdCampana   SMALLINT OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    SET @Nombre = LTRIM(RTRIM(@Nombre));
+    IF @Nombre IS NULL OR @Nombre = '' THROW 50060, 'Indique el nombre de la campaña.', 1;
+    IF @FechaInicio IS NULL OR @FechaFin IS NULL OR @FechaFin < @FechaInicio
+        THROW 50061, 'Indique las fechas de la campaña; la de fin no puede ser anterior a la de inicio.', 1;
+    IF EXISTS (SELECT 1 FROM vac.Campana WHERE Nombre = @Nombre AND FechaInicio = @FechaInicio)
+        THROW 50062, 'Ya existe una campaña con ese nombre y esa fecha de inicio.', 1;
+    IF @Metas IS NULL OR ISJSON(@Metas) = 0 OR LEFT(LTRIM(@Metas), 1) <> '[' OR NOT EXISTS (SELECT 1 FROM OPENJSON(@Metas))
+        THROW 50063, 'Indique al menos un distrito con su meta de dosis.', 1;
+
+    -- La meta se lee como texto y se convierte aquí para dar un error propio (no un fallo de conversión).
+    DECLARE @m TABLE (Ubigeo VARCHAR(10), Meta VARCHAR(30));
+    INSERT @m (Ubigeo, Meta)
+    SELECT ubigeo, metaDosis
+    FROM OPENJSON(@Metas) WITH (ubigeo NVARCHAR(10) '$.ubigeo', metaDosis NVARCHAR(30) '$.metaDosis');
+
+    IF EXISTS (SELECT 1 FROM @m m WHERE NOT EXISTS (SELECT 1 FROM vac.Distrito d WHERE d.Ubigeo = m.Ubigeo))
+        THROW 50064, 'Algún ubigeo de las metas no es válido.', 1;
+    IF EXISTS (SELECT 1 FROM @m WHERE TRY_CONVERT(BIGINT, Meta) IS NULL OR TRY_CONVERT(BIGINT, Meta) NOT BETWEEN 1 AND 1000000)
+        THROW 50065, 'La meta de cada distrito debe ser un número entero entre 1 y 1 000 000.', 1;
+    IF EXISTS (SELECT 1 FROM @m GROUP BY Ubigeo HAVING COUNT(*) > 1)
+        THROW 50066, 'Un distrito aparece más de una vez en las metas.', 1;
+
+    BEGIN TRANSACTION;
+        INSERT INTO vac.Campana (Nombre, FechaInicio, FechaFin, Descripcion)
+        VALUES (@Nombre, @FechaInicio, @FechaFin, NULLIF(LTRIM(RTRIM(@Descripcion)), ''));
+        SET @IdCampana = SCOPE_IDENTITY();
+
+        INSERT INTO vac.CampanaDistrito (IdCampana, IdDistrito, MetaDosis)
+        SELECT @IdCampana, d.IdDistrito, CONVERT(INT, m.Meta)
+        FROM @m m JOIN vac.Distrito d ON d.Ubigeo = m.Ubigeo;
+    COMMIT;
+END
+GO
+
+/* ---------------------------------------------------------------------
+   11. usp_CerrarCampana (RF-14)
+   Da por terminada hoy una campaña en curso: su fin pasa a ser la fecha de hoy y desde mañana
+   ya no admite dosis (50014). No se cierra una campaña que no empezó (50068) ni una que ya
+   terminó o termina hoy (50069). Devuelve la nueva fecha de fin.
+   --------------------------------------------------------------------- */
+CREATE OR ALTER PROCEDURE vac.usp_CerrarCampana
+    @IdCampana SMALLINT,
+    @FechaFin  DATE OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @Hoy DATE = CAST(GETDATE() AS DATE), @Inicio DATE, @Fin DATE;
+
+    BEGIN TRANSACTION;
+        SELECT @Inicio = FechaInicio, @Fin = FechaFin FROM vac.Campana WITH (UPDLOCK, HOLDLOCK) WHERE IdCampana = @IdCampana;
+        IF @Inicio IS NULL THROW 50067, 'La campaña no existe.', 1;
+        IF @Inicio > @Hoy  THROW 50068, 'La campaña aún no empezó: no hay nada que cerrar.', 1;
+        IF @Fin <= @Hoy    THROW 50069, 'La campaña ya terminó o termina hoy.', 1;
+
+        UPDATE vac.Campana SET FechaFin = @Hoy WHERE IdCampana = @IdCampana;
+        SET @FechaFin = @Hoy;
+    COMMIT;
+END
+GO
