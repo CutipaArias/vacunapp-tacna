@@ -90,7 +90,7 @@ Plan: [plan.md](plan.md) · Spec: [../SPEC.md](../SPEC.md)
   - Files: `panel/Program.cs`, `panel/wwwroot/auditoria.html`, `tests/…`
   - Deps: T2.2
 
-- [ ] **T2.5 Contexto de sesión en correcciones/eliminaciones de dosis (RN-23)** (S) — se ejecuta cuando exista el primer endpoint que corrija o elimine dosis
+- [~] **T2.5 Contexto de sesión en correcciones/eliminaciones de dosis (RN-23)** (S) — **DESCARTADA en v2.0 (03/10/2026):** no existe ningún endpoint que corrija o elimine dosis, así que no hay operación sobre la que fijar el contexto. Se retoma solo si un cambio futuro añade ese endpoint (ver SPEC.md §12, «Auditoría con usuario de aplicación»). Antes se ejecutaría cuando existiera el primer endpoint que corrija o elimine dosis.
   - Acceptance: todo endpoint que haga UPDATE/DELETE sobre `vac.DosisAplicada` ejecuta `sp_set_session_context N'usuario'` con el usuario de la sesión en la misma conexión y antes de la operación; la fila de auditoría muestra ese usuario y no `sa`.
   - Verify: xUnit por cada endpoint de ese tipo: tras la operación, `GET /api/auditoria` muestra el usuario de la sesión
   - Files: `panel/Program.cs` (`Db`), endpoint nuevo, `tests/…`
