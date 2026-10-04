@@ -108,7 +108,7 @@ docs/diagramas/ docs/img/ fuentes Mermaid y PNG de los diagramas
 docker-compose.yml        contenedor de SQL Server
 desplegar.ps1             despliegue local completo
 SPEC.md                   especificación y decisiones de diseño (§12)
-FD01…FD06-*.md / .docx    informes del proyecto (formato EPIS)
+FD01…FD06-*.docx          informes del proyecto (formato EPIS)
 ```
 
 ## Objetos principales de la base de datos
@@ -144,11 +144,11 @@ FD01…FD06-*.md / .docx    informes del proyecto (formato EPIS)
 | [Capacidad](docs/capacidad.md) | Mediciones con 20 000 pacientes y el límite del plan gratuito |
 | [SPEC](SPEC.md) | Especificación y decisiones de diseño |
 
-| Informe | Markdown | Word |
-|---|---|---|
-| FD01 Informe de Factibilidad | [md](FD01-Informe-Factibilidad.md) | [docx](FD01-EPIS-Informe%20de%20Factibilidad.docx) |
-| FD02 Documento de Visión | [md](FD02-Informe-Vision.md) | [docx](FD02-EPIS-Informe%20Vision.docx) |
-| FD03 Especificación de Requerimientos | [md](FD03-Informe-SRS.md) | [docx](FD03-EPIS-Informe%20Especificación%20Requerimientos.docx) |
-| FD04 Arquitectura de Software | [md](FD04-Informe-SAD.md) | [docx](FD04-EPIS-Informe%20Arquitectura%20de%20Software.docx) |
-| FD05 Informe Final | [md](FD05-Informe-Final.md) | [docx](FD05-EPIS-Informe%20ProyectoFinal.docx) |
-| FD06 Propuesta del Proyecto | [md](FD06-Propuesta-Proyecto.md) | [docx](FD06-EPIS-PropuestaProyecto.docx) |
+| Informe | Word |
+|---|---|
+| FD01 Informe de Factibilidad | [docx](FD01-EPIS-Informe%20de%20Factibilidad-VacunApp_1.docx) |
+| FD02 Documento de Visión | [docx](FD02-EPIS-Informe%20de%20Vision-VacunApp_1.docx) |
+| FD03 Especificación de Requerimientos | [docx](FD03-EPIS-Informe%20SRS-VacunApp_1.docx) |
+| FD04 Arquitectura de Software | [docx](FD04-EPIS-Informe%20SAD-VacunApp_1.docx) |
+| FD05 Informe Final | [docx](FD05-EPIS-Informe%20Final-VacunApp_1.docx) |
+| FD06 Propuesta del Proyecto | [docx](FD06-EPIS-PropuestaProyecto.docx) |
