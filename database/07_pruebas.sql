@@ -1343,6 +1343,58 @@ SET @n = DATEDIFF(MILLISECOND, @t0, SYSDATETIME());
 DROP TABLE #lp;
 INSERT @R VALUES ('usp_ListarPendientes', 'RNF-01: pendientes en zona de brote en menos de 2 s', 'CUMPLE', IIF(@n < 2000, 'CUMPLE', CONCAT(@n, ' ms')));
 
+/* H52-H53. La zona de brote devuelve exactamente lo que define la regla: las dosis pendientes de los pacientes que
+   tienen al menos una pendiente en un distrito con brote activo. La referencia materializa la lista una sola vez
+   (sin subconsulta correlacionada), de modo que no depende del plan que elija el optimizador. */
+DECLARE @HoyZb DATE = CAST(GETDATE() AS DATE);
+CREATE TABLE #zb_ref (IdPaciente INT PRIMARY KEY);
+INSERT #zb_ref SELECT DISTINCT IdPaciente FROM vac.fn_PendientesZonaBrote(@HoyZb);
+CREATE TABLE #zb_esp (Fila INT IDENTITY(1,1) PRIMARY KEY, NumeroDocumento VARCHAR(20), Paciente NVARCHAR(200), EdadMeses INT, Telefono VARCHAR(20), Distrito NVARCHAR(100),
+                      CodigoVacuna VARCHAR(10), NumeroDosis INT, Dosis NVARCHAR(100), MesesAtraso INT);
+INSERT #zb_esp (NumeroDocumento, Paciente, EdadMeses, Telefono, Distrito, CodigoVacuna, NumeroDosis, Dosis, MesesAtraso)
+SELECT dp.NumeroDocumento, dp.Paciente, dp.EdadMeses, dp.Telefono, dp.Distrito, dp.CodigoVacuna, dp.NumeroDosis, dp.Dosis, dp.MesesAtraso
+FROM vac.vw_DosisPendientes dp
+WHERE dp.IdPaciente IN (SELECT IdPaciente FROM #zb_ref)
+ORDER BY dp.MesesAtraso DESC, dp.Distrito, dp.Paciente;
+CREATE TABLE #zb_obt (Fila INT IDENTITY(1,1) PRIMARY KEY, NumeroDocumento VARCHAR(20), Paciente NVARCHAR(200), EdadMeses INT, Telefono VARCHAR(20), Distrito NVARCHAR(100),
+                      CodigoVacuna VARCHAR(10), NumeroDosis INT, Dosis NVARCHAR(100), MesesAtraso INT);
+INSERT #zb_obt (NumeroDocumento, Paciente, EdadMeses, Telefono, Distrito, CodigoVacuna, NumeroDosis, Dosis, MesesAtraso)
+EXEC vac.usp_ListarPendientes @SoloZonaBrote = 1, @Top = 1000000;
+SET @n = (SELECT COUNT(*) FROM (SELECT NumeroDocumento, Paciente, EdadMeses, Telefono, Distrito, CodigoVacuna, NumeroDosis, Dosis, MesesAtraso FROM #zb_esp
+                                 EXCEPT SELECT NumeroDocumento, Paciente, EdadMeses, Telefono, Distrito, CodigoVacuna, NumeroDosis, Dosis, MesesAtraso FROM #zb_obt) a)
+        + (SELECT COUNT(*) FROM (SELECT NumeroDocumento, Paciente, EdadMeses, Telefono, Distrito, CodigoVacuna, NumeroDosis, Dosis, MesesAtraso FROM #zb_obt
+                                 EXCEPT SELECT NumeroDocumento, Paciente, EdadMeses, Telefono, Distrito, CodigoVacuna, NumeroDosis, Dosis, MesesAtraso FROM #zb_esp) b);
+INSERT @R VALUES ('usp_ListarPendientes', 'Zona de brote con @Top grande: mismo conjunto de filas que la regla (EXCEPT en ambos sentidos)', '0/' + CAST((SELECT COUNT(*) FROM #zb_esp) AS VARCHAR(12)),
+                  CONCAT(@n, '/', (SELECT COUNT(*) FROM #zb_obt)));
+TRUNCATE TABLE #zb_obt;
+INSERT #zb_obt (NumeroDocumento, Paciente, EdadMeses, Telefono, Distrito, CodigoVacuna, NumeroDosis, Dosis, MesesAtraso)
+EXEC vac.usp_ListarPendientes @SoloZonaBrote = 1, @Top = 200;
+SET @n = (SELECT COUNT(*) FROM #zb_obt o JOIN #zb_esp e ON e.Fila = o.Fila
+          WHERE e.MesesAtraso = o.MesesAtraso AND e.Distrito = o.Distrito AND e.Paciente = o.Paciente);
+INSERT @R VALUES ('usp_ListarPendientes', 'Zona de brote con @Top = 200: las 200 filas coinciden en orden con la regla', '200/200', CONCAT(@n, '/', (SELECT COUNT(*) FROM #zb_obt)));
+DROP TABLE #zb_ref, #zb_esp, #zb_obt;
+
+/* H54-H56. RNF-01: la lista general, por distrito y por vacuna también tardan menos de 2 s. Con estadísticas de
+   después de las pruebas, el optimizador resolvía el NOT EXISTS de fn_DosisPendientes con un merge join
+   muchos-a-muchos (30 s). */
+CREATE TABLE #lp2 (NumeroDocumento VARCHAR(20), Paciente NVARCHAR(200), EdadMeses INT, Telefono VARCHAR(20), Distrito NVARCHAR(100),
+                   CodigoVacuna VARCHAR(10), NumeroDosis INT, Dosis NVARCHAR(100), MesesAtraso INT);
+SET @t0 = SYSDATETIME();
+INSERT #lp2 EXEC vac.usp_ListarPendientes @Top = 200;
+SET @n = DATEDIFF(MILLISECOND, @t0, SYSDATETIME());
+INSERT @R VALUES ('usp_ListarPendientes', 'RNF-01: lista general de pendientes en menos de 2 s', 'CUMPLE', IIF(@n < 2000, 'CUMPLE', CONCAT(@n, ' ms')));
+TRUNCATE TABLE #lp2;
+SET @t0 = SYSDATETIME();
+INSERT #lp2 EXEC vac.usp_ListarPendientes @Ubigeo = '230104', @Top = 200;
+SET @n = DATEDIFF(MILLISECOND, @t0, SYSDATETIME());
+INSERT @R VALUES ('usp_ListarPendientes', 'RNF-01: pendientes de un distrito en menos de 2 s', 'CUMPLE', IIF(@n < 2000, 'CUMPLE', CONCAT(@n, ' ms')));
+TRUNCATE TABLE #lp2;
+SET @t0 = SYSDATETIME();
+INSERT #lp2 EXEC vac.usp_ListarPendientes @CodigoVacuna = 'SPR', @Top = 200;
+SET @n = DATEDIFF(MILLISECOND, @t0, SYSDATETIME());
+INSERT @R VALUES ('usp_ListarPendientes', 'RNF-01: pendientes de una vacuna en menos de 2 s', 'CUMPLE', IIF(@n < 2000, 'CUMPLE', CONCAT(@n, ' ms')));
+DROP TABLE #lp2;
+
 SELECT Caso, IIF(Esperado = Obtenido, 'OK', 'FALLA') AS Resultado, Objeto, Prueba, Esperado, Obtenido
 FROM @R ORDER BY Caso;
 SELECT SUM(IIF(Esperado = Obtenido, 1, 0)) AS Correctas, COUNT(*) AS Total FROM @R;

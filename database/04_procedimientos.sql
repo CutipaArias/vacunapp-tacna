@@ -1,4 +1,4 @@
-/* =====================================================================
+﻿/* =====================================================================
    VacunApp Tacna - 04. Procedimientos almacenados
    Errores de negocio: THROW 500xx con mensaje en español.
    ===================================================================== */
@@ -231,16 +231,38 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
+    /* La zona de brote se materializa una sola vez, con estadísticas exactas. La subconsulta correlacionada anterior
+       reevaluaba fn_DosisPendientes por cada fila y, con estadísticas desactualizadas de Brote, el optimizador elegía un
+       merge join muchos-a-muchos (49 s). El resultado es el mismo: todas las pendientes de los pacientes con al menos una
+       pendiente en zona de brote.
+       OPTION (LOOP JOIN, HASH JOIN) prohíbe el merge join: sin él, el antiunión de fn_DosisPendientes (NOT EXISTS) se
+       resolvía a veces como merge sobre IdEsquema solo, muchos-a-muchos (30 s en la lista general; ver docs/capacidad.md). */
+    IF @SoloZonaBrote = 1
+    BEGIN
+        CREATE TABLE #zona (IdPaciente INT NOT NULL PRIMARY KEY);
+        INSERT #zona (IdPaciente)
+        SELECT DISTINCT IdPaciente FROM vac.fn_PendientesZonaBrote(CAST(GETDATE() AS DATE));
+
+        SELECT TOP (@Top)
+               dp.NumeroDocumento, dp.Paciente, dp.EdadMeses, dp.Telefono,
+               dp.Distrito, dp.CodigoVacuna, dp.NumeroDosis, dp.Dosis, dp.MesesAtraso
+        FROM vac.vw_DosisPendientes dp
+        WHERE (@Ubigeo       IS NULL OR dp.Ubigeo       = @Ubigeo)
+          AND (@CodigoVacuna IS NULL OR dp.CodigoVacuna = @CodigoVacuna)
+          AND dp.IdPaciente IN (SELECT IdPaciente FROM #zona)
+        ORDER BY dp.MesesAtraso DESC, dp.Distrito, dp.Paciente
+        OPTION (LOOP JOIN, HASH JOIN);
+        RETURN;
+    END
+
     SELECT TOP (@Top)
            dp.NumeroDocumento, dp.Paciente, dp.EdadMeses, dp.Telefono,
            dp.Distrito, dp.CodigoVacuna, dp.NumeroDosis, dp.Dosis, dp.MesesAtraso
     FROM vac.vw_DosisPendientes dp
     WHERE (@Ubigeo       IS NULL OR dp.Ubigeo       = @Ubigeo)
       AND (@CodigoVacuna IS NULL OR dp.CodigoVacuna = @CodigoVacuna)
-      AND (@SoloZonaBrote = 0 OR EXISTS (
-              SELECT 1 FROM vac.fn_PendientesZonaBrote(CAST(GETDATE() AS DATE)) z
-              WHERE z.IdPaciente = dp.IdPaciente))
-    ORDER BY dp.MesesAtraso DESC, dp.Distrito, dp.Paciente;
+    ORDER BY dp.MesesAtraso DESC, dp.Distrito, dp.Paciente
+    OPTION (LOOP JOIN, HASH JOIN);
 END
 GO
 

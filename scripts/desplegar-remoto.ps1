@@ -36,7 +36,7 @@ if (-not $servidor -or -not $base -or -not $usuario -or $segura.Length -eq 0) { 
 if ($base -notmatch '^[A-Za-z0-9_\-\.]+$') { throw 'Nombre de base no válido (use letras, números, _, - o .).' }
 
 # Orden idéntico a desplegar.ps1 (07_pruebas va al final: verifica también 08 y 09).
-$scripts = '01_esquema', '02_catalogos', '03_vistas', '04_procedimientos', '05_triggers', '06_datos_prueba', '08_seguridad', '09_stock', '10_agenda'
+$scripts = '01_esquema', '02_catalogos', '03_vistas', '04_procedimientos', '05_triggers', '06_datos_prueba', '08_seguridad', '09_stock', '10_agenda', '11_estadisticas'
 if ($Pruebas) { $scripts += '07_pruebas' }
 
 $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($segura)
