@@ -72,5 +72,9 @@ public sealed class AppFactory : WebApplicationFactory<Program>
     }
 }
 
+// Todas las clases comparten una sola colección: xUnit las ejecuta una tras otra, nunca en paralelo, porque tocan la misma
+// base. Cada clase que declara o cierra brotes usa su propio par enfermedad-distrito (BrotesTests: rubéola en Tarata;
+// BrotesCierreTacnaTests: el sarampión de Tacna de la semilla, que reabre y restaura) y sus aserciones traen el cuerpo
+// de la respuesta, de modo que una falla intermitente se explique sola.
 [CollectionDefinition("api")]
 public sealed class ApiCollection : ICollectionFixture<AppFactory>;

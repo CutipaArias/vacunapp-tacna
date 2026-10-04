@@ -34,8 +34,8 @@ identidad ─► registro ─► stock ─► agenda ─► vigilancia ─► de
 - **Fase 1 – identidad** (T1.1–T1.5) → *Checkpoint A*
 - **Fase 2 – registro** (T2.1–T2.4) → *Checkpoint B*
 - **Fase 3 – stock** (T3.1–T3.3) → *Checkpoint C*
-- **Fase 4 – agenda** (T4.1–T4.5) → *Checkpoint D*
-- **Fase 5 – vigilancia** (T5.1–T5.4) → *Checkpoint E*
+- **Fase 4 – agenda** (T4.1–T4.5) → *Checkpoint E*
+- **Fase 5 – vigilancia** (T5.1–T5.4) → *Checkpoint F*
 - **Fase 6 – despliegue** (T6.1–T6.4) → *Checkpoint final*
 
 Cada checkpoint: `./desplegar.ps1 -Pruebas` verde, `dotnet build` y `dotnet test` verdes, revisión contigo antes de seguir.
