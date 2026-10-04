@@ -68,16 +68,16 @@ async function cargarAlertas() {
   const q = new URLSearchParams({ top: 200 });
   for (const [k, v] of [['ubigeo', yo.idEstablecimiento == null ? $('#a-dis').value : ''], ['tipo', $('#a-tipo').value]]) if (v) q.set(k, v);
   const r = await api('/api/alertas?' + q);
-  $('#t-ale').textContent = `Â· primeras ${r.length} Â· ${r.__ms} ms`;
+  $('#t-ale').textContent = `· primeras ${r.length} · ${r.__ms} ms`;
   table($('#ale'), [
     { h: 'Tipo', f: r => tag(r.TipoAlerta) }, { h: 'DNI', k: 'NumeroDocumento' }, { h: 'Paciente', k: 'Paciente' },
     { h: 'Edad (m)', n: 1, k: 'EdadMeses' }, { h: 'Distrito', k: 'Distrito' },
-    { h: 'Dosis', f: r => `${esc(r.CodigoVacuna)} Â· ${esc(r.Dosis)}` }, { h: 'TelÃ©fono', k: 'Telefono' },
-    { h: 'DÃ­as abierta', n: 1, k: 'DiasAbierta' },
+    { h: 'Dosis', f: r => `${esc(r.CodigoVacuna)} · ${esc(r.Dosis)}` }, { h: 'Teléfono', k: 'Telefono' },
+    { h: 'Días abierta', n: 1, k: 'DiasAbierta' },
     { h: '', f: r => `<button class="b" data-id="${r.IdAlerta}" data-estado="ATENDIDA">Atender</button> <button class="b sec" data-id="${r.IdAlerta}" data-estado="DESCARTADA">Descartar</button>` }
   ], r);
   const s = await api('/api/alertas/stock');
-  $('#t-ale-stk').textContent = `Â· ${s.length} pendientes`;
+  $('#t-ale-stk').textContent = `· ${s.length} pendientes`;
   table($('#ale-stk'), [
     { h: 'Alerta', f: r => esc(TIPOS_ALERTA[r.tipoAlerta] ?? r.tipoAlerta) }, { h: 'Establecimiento', k: 'establecimiento' },
     { h: 'Vacuna', k: 'vacuna' }, { h: 'Lote', k: 'numeroLote' }, { h: 'Vence', f: r => fecha(r.fechaVencimiento) },
@@ -91,7 +91,7 @@ function prepararAlertas() {
     const b = e.target.closest('button[data-id]');
     if (!b) return;
     const accion = b.dataset.estado === 'ATENDIDA' ? 'atendida' : 'descartada';
-    if (!confirm(`Â¿Marcar esta alerta como ${accion}?`)) return;
+    if (!confirm(`¿Marcar esta alerta como ${accion}?`)) return;
     try {
       await api(`/api/alertas/${b.dataset.id}/atender`, json({ estado: b.dataset.estado }));
       $('#ale-msg').innerHTML = '';
@@ -104,10 +104,10 @@ async function cargarPendientes() {
   const q = new URLSearchParams({ top: 200 });
   for (const [k, v] of [['ubigeo', yo.idEstablecimiento == null ? $('#pe-dis').value : ''], ['vacuna', $('#pe-vac').value], ['soloBrote', $('#pe-brote').checked ? 'true' : '']]) if (v) q.set(k, v);
   const r = await api('/api/pendientes?' + q);
-  $('#t-pen').textContent = `Â· primeras ${r.length} Â· ${r.__ms} ms`;
+  $('#t-pen').textContent = `· primeras ${r.length} · ${r.__ms} ms`;
   table($('#pen-tbl'), [
     { h: 'DNI', k: 'NumeroDocumento' }, { h: 'Paciente', k: 'Paciente' }, { h: 'Edad (m)', n: 1, k: 'EdadMeses' }, { h: 'Distrito', k: 'Distrito' },
-    { h: 'Pendiente', f: r => `${esc(r.CodigoVacuna)} Â· ${esc(r.Dosis)}` }, { h: 'Meses de atraso', n: 1, k: 'MesesAtraso' }, { h: 'TelÃ©fono', k: 'Telefono' }
+    { h: 'Pendiente', f: r => `${esc(r.CodigoVacuna)} · ${esc(r.Dosis)}` }, { h: 'Meses de atraso', n: 1, k: 'MesesAtraso' }, { h: 'Teléfono', k: 'Telefono' }
   ], r);
 }
 
